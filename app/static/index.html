@@ -171,6 +171,11 @@
                             <label class="form-label fw-bold">📅 Fecha de la Invitación:</label>
                             <input type="date" id="fechaInvitacion" class="form-control">
                         </div>
+                        <!-- NUEVO: Buscar por Nombre de Orador -->
+                        <div class="col-md-3">
+                            <label class="form-label">👤 Buscar por Orador:</label>
+                            <input type="text" id="filtroNombreOrador" class="form-control" placeholder="Ej: Josue Sanchis" oninput="filtrarOradores()">
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold">🔍 Buscar por Nº Discurso:</label>
                             <div class="input-group">

@@ -2,6 +2,14 @@
 let modalWAInstance = null;
 let modalPDFInstance = null;
 
+if (typeof window.listaOradoresGlobal === 'undefined') {
+    window.listaOradoresGlobal = [];
+}
+
+if (typeof window.todosLosOradoresGlobal === 'undefined') {
+    window.todosLosOradoresGlobal = [];
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializar modales de Bootstrap
     const elemWA = document.getElementById('modalWhatsapp');
@@ -23,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarCongregaciones();
     filtrarPorCongregacion();
 
-    // 👉 MÉTELO AQUÍ DENTRO:
     if (typeof cargarCongregacionesEnSelects === 'function') {
         cargarCongregacionesEnSelects();
     }
@@ -38,6 +45,25 @@ document.addEventListener('DOMContentLoaded', () => {
         selectEditar.onchange = function() { verificarNuevaCongregacion(this); };
     }
 });
+
+async function cargarCongregaciones() {
+    try {
+        const response = await fetch('/api/congregaciones');
+        const congregaciones = await response.json();
+        
+        const select = document.getElementById('selectCongregacion');
+        if (select) {
+            let opcionesHTML = '<option value="">Todas las congregaciones</option>';
+            congregaciones.forEach(c => {
+                opcionesHTML += `<option value="${c.id}">${c.nombre}</option>`;
+            });
+            select.innerHTML = opcionesHTML;
+        }
+    } catch (error) {
+        console.error("Error al cargar congregaciones principales:", error);
+    }
+}
+
 async function cargarCongregacionesEnSelects() {
     try {
         const response = await fetch('/api/congregaciones');
@@ -48,10 +74,8 @@ async function cargarCongregacionesEnSelects() {
             opcionesHTML += `<option value="${c.id}">${c.nombre}</option>`;
         });
         
-        // Añadir la opción especial al final
         opcionesHTML += '<option value="NUEVA_CONGREGACION">➕ Añadir nueva congregación...</option>';
         
-        // Asignar a ambos selects (Crear y Editar)
         const selectNuevo = document.getElementById('nuevo-orador-congre');
         const selectEditar = document.getElementById('editar-orador-congre');
         
@@ -59,13 +83,17 @@ async function cargarCongregacionesEnSelects() {
         if (selectEditar) selectEditar.innerHTML = opcionesHTML;
         
     } catch (error) {
-        console.error("Error al cargar las congregaciones:", error);
+        console.error("Error al cargar las congregaciones en selects:", error);
     }
 }
 
 // Renderizar la tabla de oradores actualizada para incluir congregación y botones de acción
-function renderTabla(oradores) {
-    listaOradoresGlobal = oradores;
+function renderTabla(oradores, esListaCompleta = false) {
+    window.listaOradoresGlobal = oradores;
+    
+    if (esListaCompleta) {
+        window.todosLosOradoresGlobal = oradores;
+    }
 
     if (typeof cargarOradoresEnDesplegable === 'function') {
         cargarOradoresEnDesplegable(oradores);
@@ -121,22 +149,57 @@ function renderTabla(oradores) {
     }).join('');
 }
 
-// Filtros y Búsquedas
+// Filtros y Búsquedas combinados
 async function buscarPorDiscurso() {
     const num = document.getElementById('numDiscurso').value;
-    if (!num) return;
-    const res = await fetch(`/api/oradores/buscar-por-discurso?numero=${num}`);
-    const data = await res.json();
-    renderTabla(data);
+    if (!num) {
+        filtrarPorCongregacion();
+        return;
+    }
+    try {
+        const res = await fetch(`/api/oradores/buscar-por-discurso?numero=${num}`);
+        const data = await res.json();
+        renderTabla(data, false);
+    } catch (error) {
+        console.error("Error al buscar por discurso:", error);
+    }
 }
 
 async function filtrarPorCongregacion() {
     const select = document.getElementById('selectCongregacion');
     const id = select ? select.value : '';
     const url = id ? `/api/oradores?congregacion_id=${id}` : '/api/oradores';
-    const res = await fetch(url);
-    const data = await res.json();
-    renderTabla(data);
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        renderTabla(data, true); // Guarda como base para los filtros de texto
+    } catch (error) {
+        console.error("Error al filtrar por congregación:", error);
+    }
+}
+
+function filtrarOradores() {
+    const discursoInput = document.getElementById('numDiscurso');
+    const congregacionSelect = document.getElementById('selectCongregacion');
+    const inputNombre = document.getElementById('filtroNombreOrador');
+
+    const discursoFiltro = discursoInput ? discursoInput.value.trim() : "";
+    const congregacionFiltro = congregacionSelect ? congregacionSelect.value : "";
+    const nombreFiltro = inputNombre ? inputNombre.value.toLowerCase().trim() : "";
+
+    const oradoresFiltrados = window.todosLosOradoresGlobal.filter(orador => {
+        const coincideNombre = nombreFiltro === "" || orador.nombre.toLowerCase().includes(nombreFiltro);
+        
+        const discursosArray = (orador.discursos || []).map(d => String(d.numero_discurso || d.numero || d));
+        const coincideDiscurso = discursoFiltro === "" || discursosArray.includes(discursoFiltro);
+        
+        const congreIdOrador = String(orador.congregacion_id || (orador.congregacion && orador.congregacion.id) || "");
+        const coincideCongregacion = congregacionFiltro === "" || congreIdOrador === congregacionFiltro;
+
+        return coincideNombre && coincideDiscurso && coincideCongregacion;
+    });
+
+    renderTabla(oradoresFiltrados, false);
 }
 
 // Formato de Fecha
@@ -149,7 +212,7 @@ function formatearFechaEspanol(fechaStr) {
 
 // Lógica de Mensajes WhatsApp
 function generarMensaje(index) {
-    const orador = listaOradoresGlobal[index];
+    const orador = window.listaOradoresGlobal[index];
     const fechaRaw = document.getElementById('fechaInvitacion').value;
     const fechaFormateada = formatearFechaEspanol(fechaRaw);
     const primerNombre = orador.nombre.split(' ')[0];
@@ -188,20 +251,6 @@ document.getElementById('modalNuevoOrador')?.addEventListener('show.bs.modal', a
         const congregaciones = await res.json();
         
         const select = document.getElementById('nuevo-orador-congre');
-        select.innerHTML = '<option value="">Selecciona congregación...</option>' +
-            congregaciones.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-    } catch (err) {
-        console.error("Error al cargar congregaciones:", err);
-    }
-});
-
-// Cargar congregaciones en el select del modal al abrirlo (con opción de añadir nueva)
-document.getElementById('modalNuevoOrador')?.addEventListener('show.bs.modal', async () => {
-    try {
-        const res = await fetch('/api/congregaciones');
-        const congregaciones = await res.json();
-        
-        const select = document.getElementById('nuevo-orador-congre');
         if (select) {
             let opcionesHTML = '<option value="">Selecciona congregación...</option>';
             congregaciones.forEach(c => {
@@ -213,9 +262,10 @@ document.getElementById('modalNuevoOrador')?.addEventListener('show.bs.modal', a
             select.onchange = function() { verificarNuevaCongregacion(this); };
         }
     } catch (err) {
-        console.error("Error al cargar congregaciones:", err);
+        console.error("Error al cargar congregaciones en modal nuevo:", err);
     }
 });
+
 async function guardarNuevoOrador() {
     const nombre = document.getElementById('nuevo-orador-nombre').value;
     const telefono = document.getElementById('nuevo-orador-telefono').value;
@@ -232,7 +282,6 @@ async function guardarNuevoOrador() {
     };
 
     try {
-        // Importante: incluir /api al principio de la ruta
         const response = await fetch('/api/oradores', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -240,7 +289,7 @@ async function guardarNuevoOrador() {
         });
 
         if (response.ok) {
-            const modalEl = document.getElementById('modalNuevoOrador'); // Ajusta el ID de tu modal si es distinto
+            const modalEl = document.getElementById('modalNuevoOrador');
             const modal = bootstrap.Modal.getInstance(modalEl);
             modal.hide();
 
@@ -260,20 +309,16 @@ async function guardarNuevoOrador() {
 }
 
 async function eliminarOrador(oradorId) {
-    // 1. Primera pregunta: ¿Estás seguro de que quieres eliminar?
     const confirmar = window.confirm("¿Estás seguro de que quieres eliminar este orador?");
-    if (!confirmar) return; // Si le da a cancelar, no hace nada
+    if (!confirmar) return;
 
     try {
         const response = await fetch(`/api/${oradorId}`, {
             method: 'DELETE'
         });
 
-        // 2. Si el servidor responde con 409 (significa que está puesto en la planificación)
         if (response.status === 409) {
             const data = await response.json();
-            
-            // Muestra el mensaje del backend advirtiendo que tiene fechas en la planificación
             const confirmarForzar = window.confirm(data.detail + "\n\n¿Deseas continuar y borrarlo de todos modos?");
             
             if (confirmarForzar) {
@@ -296,10 +341,8 @@ async function eliminarOrador(oradorId) {
     }
 }
 
-// Función auxiliar para forzar el borrado cuando el usuario acepta la advertencia
 async function forzarEliminacionOrador(oradorId) {
     try {
-        // CORREGIDO: Ajustado a la ruta real de tu backend (/api/{id}?forzar=true)
         const response = await fetch(`/api/${oradorId}?forzar=true`, {
             method: 'DELETE'
         });
@@ -318,9 +361,8 @@ async function forzarEliminacionOrador(oradorId) {
     }
 }
 
-// 1. Abrir el modal y cargar los datos correctamente sin disparar eventos fantasma
 function abrirModalEditarOrador(id) {
-    const orador = listaOradoresGlobal.find(o => o.id === id);
+    const orador = window.listaOradoresGlobal.find(o => o.id === id);
     if (!orador) return;
 
     window.oradorEditandoId = id;
@@ -328,10 +370,8 @@ function abrirModalEditarOrador(id) {
     document.getElementById('editar-orador-nombre').value = orador.nombre || '';
     document.getElementById('editar-orador-telefono').value = orador.telefono || '';
     
-    // Obtener el ID de la congregación de forma segura (sea número, texto u objeto)
     const congreId = orador.congregacion_id || (orador.congregacion && orador.congregacion.id) || orador.congregacion || '';
     
-    // Cargar congregaciones y asignar el valor actual sin activar el prompt
     cargarCongregacionesEnModal('editar-orador-congre', congreId);
 
     const discursosArray = (orador.discursos || []).map(d => d.numero_discurso || d.numero || d);
@@ -342,7 +382,6 @@ function abrirModalEditarOrador(id) {
     modal.show();
 }
 
-// 2. Rellenar el selector y controlar el evento change de forma segura
 function cargarCongregacionesEnModal(selectId, congregacionIdActual) {
     const select = document.getElementById(selectId);
     if (!select) return;
@@ -352,7 +391,7 @@ function cargarCongregacionesEnModal(selectId, congregacionIdActual) {
     
     if (selectPrincipal) {
         Array.from(selectPrincipal.options).forEach(opt => {
-            if (opt.value !== "") { // Ignorar la opción vacía de "Todas"
+            if (opt.value !== "") { 
                 select.add(opt.cloneNode(true));
             }
         });
@@ -363,12 +402,10 @@ function cargarCongregacionesEnModal(selectId, congregacionIdActual) {
     optionNueva.textContent = '➕ Añadir nueva congregación...';
     select.appendChild(optionNueva);
 
-    // Asignar el valor actual si lo tiene
     if (congregacionIdActual) {
         select.value = congregacionIdActual;
     }
 
-    // Vincular el evento change por código para que solo salte cuando el usuario haga clic a propósito
     select.onchange = function() {
         verificarNuevaCongregacion(this);
     };
@@ -379,7 +416,6 @@ async function verificarNuevaCongregacion(selectElement) {
         const nuevaCongre = prompt('Introduce el nombre de la nueva congregación:');
         if (nuevaCongre && nuevaCongre.trim() !== '') {
             try {
-                // Importante: añadir /api aquí también
                 const response = await fetch('/api/congregaciones', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -390,18 +426,16 @@ async function verificarNuevaCongregacion(selectElement) {
                     const data = await response.json();
                     const nuevaId = data.id || data.nombre;
 
-                    // Actualizar todos los desplegables de la página añadiendo la nueva opción antes de "NUEVA_CONGREGACION"
                     const selects = document.querySelectorAll('#nuevo-orador-congre, #editar-orador-congre, #selectCongregacion');
                     selects.forEach(s => {
                         const opt = document.createElement('option');
                         opt.value = nuevaId;
                         opt.textContent = nuevaCongre.trim();
-                        
-                        // Insertarla antes de la última opción (que es la de crear nueva)
                         s.insertBefore(opt, s.lastElementChild);
                     });
 
                     selectElement.value = nuevaId;
+                    filtrarOradores();
                 } else {
                     alert('Error al guardar la congregación en el servidor.');
                     selectElement.value = '';
@@ -434,7 +468,6 @@ async function guardarEdicionOrador() {
     };
 
     try {
-        // Añade /api aquí para que coincida con el backend
         const response = await fetch(`/api/oradores/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
