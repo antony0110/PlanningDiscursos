@@ -8,9 +8,18 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body { background-color: #f4f6f9; min-height: 100vh; }
+        
+        /* Sidebar adaptable a móviles */
         .sidebar {
-            width: 260px; background-color: #2c3e50; color: #fff;
-            min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100;
+            width: 260px; 
+            background-color: #2c3e50; 
+            color: #fff;
+            min-height: 100vh; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            z-index: 100;
+            transition: transform 0.3s ease-in-out;
         }
         .sidebar .nav-link {
             color: #ecf0f1; padding: 12px 20px; margin: 4px 10px;
@@ -19,7 +28,18 @@
         .sidebar .nav-link:hover, .sidebar .nav-link.active {
             background-color: #0d6efd; color: #fff;
         }
-        .main-content { margin-left: 260px; padding: 30px; }
+
+        /* Contenido principal adaptativo para pantallas grandes y móviles */
+        .main-content { 
+            padding: 20px; 
+        }
+        @media (min-width: 992px) {
+            .main-content { 
+                margin-left: 260px; 
+                padding: 30px; 
+            }
+        }
+
         .card { border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .badge-discurso { background-color: #0d6efd; margin: 2px; }
         .fila-plan { cursor: pointer; }
@@ -54,12 +74,23 @@
     <div id="app-container" style="display: none;">
 
         <!-- Botón de Cerrar Sesión en la esquina superior derecha -->
-        <button class="btn btn-outline-danger btn-sm position-fixed top-0 end-0 m-3 shadow-sm" style="z-index: 1000;" onclick="cerrarSesion()">
+        <button class="btn btn-outline-danger btn-sm position-fixed top-0 end-0 m-3 shadow-sm" style="z-index: 1050;" onclick="cerrarSesion()">
             <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
         </button>
 
-        <!-- PANEL LATERAL -->
-        <div class="sidebar d-flex flex-column p-3">
+        <!-- NAVBAR MÓVIL (Solo visible en pantallas pequeñas) -->
+        <nav class="navbar navbar-dark bg-dark d-lg-none px-3">
+            <div class="container-fluid">
+                <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMobile" aria-controls="sidebarMobile">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <span class="navbar-brand mb-0 h1 fs-6"><i class="bi bi-journal-text me-2"></i>Planning Discursos</span>
+            </div>
+        </nav>
+
+        <!-- OFFCANVAS SIDEBAR PARA MÓVIL Y ESCRITORIO -->
+        <!-- En escritorio se muestra fijo a la izquierda gracias a .d-none .d-lg-flex y la clase .sidebar -->
+        <div class="sidebar d-none d-lg-flex flex-column p-3">
             <h4 class="text-white mb-4 px-2 fs-5">
                 <i class="bi bi-journal-text me-2"></i>Planning Discursos
             </h4>
@@ -88,6 +119,41 @@
             </ul>
             <hr class="text-secondary">
             <div class="small text-white-50 px-2">Congregación Algemesí</div>
+        </div>
+
+        <!-- PANEL LATERAL DESLIZABLE (OFFCANVAS) EXCLUSIVO PARA MÓVILES -->
+        <div class="offcanvas offcanvas-start bg-dark text-white" tabindex="-1" id="sidebarMobile" aria-labelledby="sidebarMobileLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="sidebarMobileLabel"><i class="bi bi-journal-text me-2"></i>Planning Discursos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body d-flex flex-column p-3">
+                <hr class="text-secondary">
+                <ul class="nav flex-column sidebar-nav">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-bs-dismiss="offcanvas" onclick="cambiarSeccion('discursantes')">
+                            <i class="bi bi-people-fill me-2"></i> Discursantes
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-bs-dismiss="offcanvas" onclick="cambiarSeccion('invitacion')">
+                            <i class="bi bi-file-earmark-text-fill me-2"></i> Generar Invitación
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-bs-dismiss="offcanvas" onclick="cambiarSeccion('planificacion')">
+                            <i class="bi bi-calendar3 me-2"></i> Planificación Anual
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-bs-dismiss="offcanvas" onclick="cambiarSeccion('historico')">
+                            <i class="bi bi-clock-history me-2"></i> Histórico
+                        </a>
+                    </li>
+                </ul>
+                <hr class="text-secondary mt-auto">
+                <div class="small text-white-50 px-2">Congregación Algemesí</div>
+            </div>
         </div>
 
         <!-- CONTENIDO PRINCIPAL -->
