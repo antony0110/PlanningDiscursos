@@ -53,3 +53,10 @@ def startup_event():
         print(f"⚠️ Error al auto-importar datos en el arranque: {e}")
     finally:
         db.close()
+
+
+from fastapi.responses import FileResponse
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("app/static/favicon.ico")
