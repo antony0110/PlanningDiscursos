@@ -1,0 +1,4 @@
+/* Ocultar por defecto CUALQUIER sección que no tenga el display block aplicado explícitamente por el usuario */
+.main-content > section {
+    display: none !important;
+}

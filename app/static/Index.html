@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planning Discursos - Algemesí</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; min-height: 100vh; }
+        .sidebar {
+            width: 260px; background-color: #2c3e50; color: #fff;
+            min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100;
+        }
+        .sidebar .nav-link {
+            color: #ecf0f1; padding: 12px 20px; margin: 4px 10px;
+            border-radius: 8px; font-weight: 500; transition: all 0.2s;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background-color: #0d6efd; color: #fff;
+        }
+        .main-content { margin-left: 260px; padding: 30px; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .badge-discurso { background-color: #0d6efd; margin: 2px; }
+        .fila-plan { cursor: pointer; }
+        .fila-plan:hover { background-color: #f1f3f5 !important; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. PANTALLA DE LOGIN INDEPENDIENTE (PUERTA DE ENTRADA) -->
+    <div id="login-screen" class="container-fluid d-flex justify-content-center align-items-center vh-100 bg-light" style="position: fixed; top: 0; left: 0; z-index: 9999; display: none;">
+        <div class="card p-4 shadow" style="width: 380px;">
+            <h3 class="text-center mb-4"><i class="bi bi-journal-text me-2 text-primary"></i>Planning Discursos</h3>
+            <div class="mb-3">
+                <label class="form-label">Usuario</label>
+                <input type="text" id="login-user" class="form-control" placeholder="Introduce tu usuario">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Contraseña</label>
+                <div class="input-group">
+                    <input type="password" id="login-password" class="form-control" placeholder="Introduce tu contraseña">
+                    <button class="btn btn-outline-secondary" type="button" id="btnTogglePassword" onclick="alternarVisibilidadPassword()">
+                        <i class="bi bi-eye" id="iconoOjo"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="login-error" class="text-danger small mb-3" style="display: none;"></div>
+            <button type="button" class="btn btn-primary w-100" onclick="ejecutarLogin()">Entrar</button>
+        </div>
+    </div>
+
+    <!-- 2. CONTENEDOR PRINCIPAL DE LA APLICACIÓN (OCULTO HASTA AUTENTICARSE) -->
+    <div id="app-container" style="display: none;">
+
+        <!-- Botón de Cerrar Sesión en la esquina superior derecha -->
+        <button class="btn btn-outline-danger btn-sm position-fixed top-0 end-0 m-3 shadow-sm" style="z-index: 1000;" onclick="cerrarSesion()">
+            <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+        </button>
+
+        <!-- PANEL LATERAL -->
+        <div class="sidebar d-flex flex-column p-3">
+            <h4 class="text-white mb-4 px-2 fs-5">
+                <i class="bi bi-journal-text me-2"></i>Planning Discursos
+            </h4>
+            <hr class="text-secondary">
+            <ul class="nav flex-column sidebar-nav">
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="btn-discursantes" onclick="cambiarSeccion('discursantes')">
+                        <i class="bi bi-people-fill me-2"></i> Discursantes
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="btn-invitacion" onclick="cambiarSeccion('invitacion')">
+                        <i class="bi bi-file-earmark-text-fill me-2"></i> Generar Invitación
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="btn-planificacion" onclick="cambiarSeccion('planificacion')">
+                        <i class="bi bi-calendar3 me-2"></i> Planificación Anual
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="btn-historico" onclick="cambiarSeccion('historico')">
+                        <i class="bi bi-clock-history me-2"></i> Histórico
+                    </a>
+                </li>
+            </ul>
+            <hr class="text-secondary">
+            <div class="small text-white-50 px-2">Congregación Algemesí</div>
+        </div>
+
+        <!-- CONTENIDO PRINCIPAL -->
+        <div class="main-content">
+            
+            <!-- SECCIÓN 1: DISCURSANTES -->
+            <section id="sec-discursantes" style="display: block;">
+                <h3 class="mb-4 text-primary"><i class="bi bi-people-fill me-2"></i>Buscador de Discursantes</h3>
+                <div class="card p-3 mb-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">📅 Fecha de la Invitación:</label>
+                            <input type="date" id="fechaInvitacion" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">🔍 Buscar por Nº Discurso:</label>
+                            <div class="input-group">
+                                <input type="number" id="numDiscurso" class="form-control" placeholder="Ej: 22">
+                                <button onclick="buscarPorDiscurso()" class="btn btn-primary">Buscar</button>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">🏛️ Congregación:</label>
+                            <select id="selectCongregacion" class="form-select" onchange="filtrarPorCongregacion()">
+                                <option value="">Todas las congregaciones</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-between align-items-center mb-3">
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevoOrador">
+                        ➕ Añadir Nuevo Orador
+                    </button>
+                </div>
+
+                <div class="card p-3">
+                    <h5 class="card-title mb-3">Oradores Encontrados</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Cargo</th>
+                                    <th>Teléfono</th>
+                                    <th>Discursos Preparados</th>
+                                    <th>Congregación</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaOradores">
+                                <tr><td colspan="6" class="text-center text-muted">Cargando oradores...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECCIÓN 2: GENERAR INVITACIÓN MANUAL -->
+            <section id="sec-invitacion" style="display: none;">
+                <h3 class="mb-4 text-primary"><i class="bi bi-file-earmark-pdf-fill me-2"></i>Generar Invitación Manual</h3>
+                <div class="card p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Nombre del Orador:</label>
+                            <input type="text" id="pdfOradorNombre" list="listaOradoresDatalist" class="form-control" placeholder="Escribe para buscar..." oninput="alSeleccionarOrador(this.value)">
+                            <datalist id="listaOradoresDatalist"></datalist>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Fecha del Discurso:</label>
+                            <input type="date" id="pdfFecha" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Nº Bosquejo:</label>
+                            <select id="pdfNumDiscurso" class="form-select">
+                                <option value="">Selecciona un bosquejo...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label fw-bold">Título / Tema del Discurso:</label>
+                            <input type="text" id="pdfTituloDiscurso" class="form-control" placeholder="Se completará automáticamente...">
+                        </div>
+                        <div class="col-12 d-flex justify-content-end gap-2 mt-4">
+                            <button type="button" class="btn btn-success" onclick="enviarWhatsAppDirecto()">
+                                <i class="bi bi-whatsapp me-1"></i> Enviar WhatsApp
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="generarPDFDirecto()">
+                                <i class="bi bi-file-earmark-pdf me-1"></i> Descargar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECCIÓN 3: PLANIFICACIÓN ANUAL -->
+            <section id="sec-planificacion" style="display: none;">
+                <div class="container-fluid my-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="fw-bold"><i class="bi bi-calendar3 me-2"></i>Planificación Anual</h3>
+                        <div class="d-flex align-items-center">
+                            <label for="selectAnioPlan" class="fw-bold me-2">Año:</label>
+                            <select id="selectAnioPlan" class="form-select w-auto" onchange="cargarPlanificacion()"></select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive shadow-sm rounded">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Orador</th>
+                                    <th>Teléfono</th>
+                                    <th>Congregación</th>
+                                    <th>Bosquejo y Tema</th>
+                                    <th>Invitación</th>
+                                    <th>Confirmación</th>
+                                    <th>Fecha Envío</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaPlanificacionBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECCIÓN 4: HISTÓRICO -->
+            <section id="sec-historico" style="display: none;">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Histórico de Discursos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped text-center align-middle" id="tabla-historico">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 70px;">Nº</th>
+                                        <th class="text-start">Tema del Discurso</th>
+                                        <th>Últimas Fechas / Años</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Los datos se cargan dinámicamente desde Historico.js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+    </div>
+
+    <!-- MODALES DE LA APLICACIÓN (Fuera del main-content) -->
+    
+    <!-- Modal para Crear Orador -->
+    <div class="modal fade" id="modalNuevoOrador" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Añadir Nuevo Orador</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-nuevo-orador">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre del Orador:</label>
+                            <input type="text" id="nuevo-orador-nombre" class="form-control" required placeholder="Ej: Juan Pérez">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Teléfono:</label>
+                            <input type="text" id="nuevo-orador-telefono" class="form-control" placeholder="Ej: 600123456">
+                        </div>
+                        <div class="mb-3">
+                            <label for="nuevo-orador-congre" class="form-label">Congregación:</label>
+                            <select class="form-select" id="nuevo-orador-congre"></select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Nº de Bosquejos (separados por comas):</label>
+                            <input type="text" id="nuevo-orador-discursos" class="form-control" placeholder="Ej: 15, 24, 76">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="guardarNuevoOrador()">Guardar Orador</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edición / Asignación -->
+    <div class="modal fade" id="modalEditarPlan" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Asignar o Modificar Discursante</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-fecha-id">
+                    
+                    <div id="bloque-campos-normales">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Nombre del Orador:</label>
+                                <input class="form-control" list="listaOradoresDatalist" id="input-orador-nombre" placeholder="Escribe para buscar orador..." autocomplete="off" oninput="alSeleccionarOradorModal(this.value)">
+                                <datalist id="listaOradoresDatalist"></datalist>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Teléfono:</label>
+                                <input type="text" class="form-control" id="input-telefono" placeholder="Introduce el teléfono">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label fw-bold">Congregación:</label>
+                                <input type="text" class="form-control" id="input-congregacion" placeholder="Congregación">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label fw-bold">Nº Bosquejo:</label>
+                                <select class="form-select" id="select-bosquejo-modal">
+                                    <option value="">Selecciona un bosquejo...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8 mb-3">
+                                <label class="form-label fw-bold">Título / Tema del Discurso:</label>
+                                <input type="text" class="form-control" id="input-bosquejo-titulo" readonly placeholder="El tema aparecerá automáticamente">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="check-evento-especial" onchange="toggleCamposEventoEspecial()">
+                        <label class="form-check-label fw-bold text-danger" for="check-evento-especial">Marcar como Evento Especial (Visita, Asamblea, etc.)</label>
+                    </div>
+
+                    <div class="mb-3" id="container-texto-evento" style="display: none;">
+                        <label for="input-texto-evento" class="form-label fw-bold">Nombre del Evento Especial:</label>
+                        <input type="text" class="form-control" id="input-texto-evento" placeholder="Ej: Visita del Super, Asamblea Regional...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger me-auto" onclick="borrarAsignacion()">Borrar Asignación</button>
+                    <button type="button" class="btn btn-primary" onclick="guardarAsignacionManual()">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Orador -->
+    <div class="modal fade" id="modalEditarOrador" tabindex="-1" aria-labelledby="modalEditarOradorLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarOradorLabel">Editar Orador</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editar-orador-nombre" class="form-label">Nombre del Orador:</label>
+                        <input type="text" class="form-control" id="editar-orador-nombre">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar-orador-telefono" class="form-label">Teléfono:</label>
+                        <input type="text" class="form-control" id="editar-orador-telefono">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar-orador-congre" class="form-label">Congregación:</label>
+                        <select class="form-select" id="editar-orador-congre"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar-orador-discursos" class="form-label">Discursos Preparados (separados por comas):</label>
+                        <input type="text" class="form-control" id="editar-orador-discursos" placeholder="Ej: 7, 166, 177">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="guardarEdicionOrador()">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/invitacion.js"></script>
+    <script src="/static/js/planificacion.js"></script>
+    <script src="/static/js/Discursantes.js"></script>
+    <script src="/static/js/Historico.js"></script>
+</body>
+</html>
