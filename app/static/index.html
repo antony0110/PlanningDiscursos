@@ -167,38 +167,35 @@
             <section id="sec-discursantes" style="display: block;">
                 <h3 class="mb-4 text-primary"><i class="bi bi-people-fill me-2"></i>Buscador de Discursantes</h3>
                 <div class="card p-3 mb-4">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">📅 Fecha de la Invitación:</label>
-                            <input type="date" id="fechaInvitacion" class="form-control">
-                        </div>
-                        <!-- NUEVO: Buscar por Nombre de Orador -->
-                        <div class="col-md-3">
-                            <label class="form-label">👤 Buscar por Orador:</label>
-                            <input type="text" id="filtroNombreOrador" class="form-control" placeholder="Ej: Josue Sanchis" oninput="filtrarOradores()">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">🔍 Buscar por Nº Discurso:</label>
-                            <div class="input-group">
-                                <input type="number" id="numDiscurso" class="form-control" placeholder="Ej: 22">
-                                <button onclick="buscarPorDiscurso()" class="btn btn-primary">Buscar</button>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">🏛️ Congregación:</label>
-                            <select id="selectCongregacion" class="form-select" onchange="filtrarPorCongregacion()">
-                                <option value="">Todas las congregaciones</option>
-                            </select>
-                        </div>
-                    </div>
+                  <div class="row g-3">
+            <!-- Buscar por Nombre de Orador -->
+            <div class="col-md-4">
+                <label class="form-label fw-bold">👤 Buscar por Orador:</label>
+                <input type="text" id="filtroNombreOrador" class="form-control" placeholder="Ej: Josue Sanchis" oninput="filtrarOradores()">
+                
+                <!-- Botón con margen superior para separarlo del input -->
+                <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#modalNuevoOrador">
+                 ➕ Añadir Nuevo Orador
+                </button>
+            </div>
+            
+            <!-- Buscar por Nº Discurso -->
+            <div class="col-md-4">
+                <label class="form-label fw-bold">🔍 Buscar por Nº Discurso:</label>
+                <div class="input-group">
+                    <input type="number" id="numDiscurso" class="form-control" placeholder="Ej: 22" oninput="filtrarOradores()">
+                    <button onclick="buscarPorDiscurso()" class="btn btn-primary" type="button">Buscar</button>
                 </div>
-
-                <div class="d-flex justify-between align-items-center mb-3">
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevoOrador">
-                        ➕ Añadir Nuevo Orador
-                    </button>
-                </div>
-
+            </div>
+            
+            <!-- Congregación -->
+            <div class="col-md-4">
+                <label class="form-label fw-bold">🏛️ Congregación:</label>
+                <select id="selectCongregacion" class="form-select" onchange="filtrarPorCongregacion()">
+                    <option value="">Todas las congregaciones</option>
+                </select>
+            </div>
+         </div>
                 <div class="card p-3">
                     <h5 class="card-title mb-3">Oradores Encontrados</h5>
                     <div class="table-responsive">

@@ -548,10 +548,12 @@ async function borrarAsignacion() {
 
     const fechaId = document.getElementById('edit-fecha-id').value;
 
-    // Al enviar null en ambos campos, tu backend los limpia automáticamente
+    // Incluimos las propiedades del evento especial en null / false para limpiarlo por completo
     const payload = {
         id_orador: null,
-        numero_bosquejo: null
+        numero_bosquejo: null,
+        es_evento_especial: false,
+        nombre_evento_especial: null
     };
 
     try {
