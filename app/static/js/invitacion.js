@@ -153,3 +153,44 @@ function generarPDFDirecto() {
     const url = `/api/invitacion/pdf?orador_nombre=${encodeURIComponent(oradorNombre)}&numero_discurso=${encodeURIComponent(numDiscurso)}&titulo_discurso=${encodeURIComponent(tituloDiscurso)}&fecha_texto=${encodeURIComponent(fechaTexto)}`;
     window.open(url, '_blank');
 }
+
+async function verificarAntiguedadDiscurso() {
+    const selectBosquejo = document.getElementById('pdfNumDiscurso');
+    const avisoDiv = document.getElementById('avisoAntiguedadDiscurso');
+    
+    const valorSeleccionado = selectBosquejo.value;
+    
+    if (!valorSeleccionado) {
+        avisoDiv.style.display = 'none';
+        return;
+    }
+
+    // Extraer únicamente los dígitos del valor seleccionado
+    const numeroBosquejo = valorSeleccionado.replace(/\D/g, '');
+    
+    if (!numeroBosquejo) {
+        avisoDiv.style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/historico/bosquejo/${numeroBosquejo}`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        
+        if (data.encontrado_reciente && data.ultima_fecha) {
+            const partes = data.ultima_fecha.split('-');
+            const fechaFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            
+            avisoDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning"></i> ⚠️ Este discurso se ha hecho hace menos de un año (última vez el <strong>${fechaFormateada}</strong>).`;
+            avisoDiv.className = "form-text text-danger fw-semibold mt-1";
+            avisoDiv.style.display = "block";
+        } else {
+            avisoDiv.style.display = "none";
+        }
+    } catch (error) {
+        console.error("Error al comprobar la antigüedad del discurso:", error);
+        avisoDiv.style.display = "none";
+    }
+}

@@ -234,9 +234,10 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">Nº Bosquejo:</label>
-                            <select id="pdfNumDiscurso" class="form-select">
+                            <select id="pdfNumDiscurso" class="form-select" onchange="verificarAntiguedadDiscurso()">
                                 <option value="">Selecciona un bosquejo...</option>
                             </select>
+                            <div id="avisoAntiguedadDiscurso" class="form-text mt-1" style="display: none;"></div>
                         </div>
                         <div class="col-md-9">
                             <label class="form-label fw-bold">Título / Tema del Discurso:</label>

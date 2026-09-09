@@ -46,17 +46,18 @@ def buscar_por_discurso(numero: int, db: Session = Depends(get_db)):
         .all()
     )
     return oradores
+
+
 class OradorCreateSchema(BaseModel):
     nombre: str
     telefono: Optional[str] = ""
     congregacion_id: Optional[int] = None
     discursos: List[int] = []
 
+
 @router.post("/oradores")
 def crear_orador_manual(datos: OradorCreateSchema, db: Session = Depends(get_db)):
     """Crea un nuevo orador manualmente con su congregación y discursos"""
-    
-    # Verificar si ya existe un orador con el mismo nombre
     existe = db.query(models.Orador).filter(models.Orador.nombre.ilike(datos.nombre.strip())).first()
     if existe:
         raise HTTPException(status_code=400, detail="Ya existe un orador registrado con ese nombre.")
@@ -70,14 +71,10 @@ def crear_orador_manual(datos: OradorCreateSchema, db: Session = Depends(get_db)
     db.commit()
     db.refresh(nuevo_orador)
 
-    
-
-    # Asociar los discursos
     for num_disc in datos.discursos:
         db.add(models.DiscursoOrador(orador_id=nuevo_orador.id, numero_discurso=num_disc))
     
     db.commit()
-    
     return {"status": "success", "mensaje": "Orador creado correctamente"}
 
 
@@ -109,7 +106,6 @@ def descargar_invitacion_pdf(
 
 @router.get("/bosquejos/{numero}")
 def obtener_bosquejo(numero: str, db: Session = Depends(get_db)):
-    # Extraer únicamente los dígitos por si el frontend envía texto o formato especial
     num_limpio = ''.join(filter(str.isdigit, str(numero)))
     
     if not num_limpio:
@@ -119,7 +115,6 @@ def obtener_bosquejo(numero: str, db: Session = Depends(get_db)):
     bosquejo = db.query(Bosquejo).filter(Bosquejo.numero == num_int).first()
     
     if not bosquejo:
-        # Fallback descriptivo para que no se quede vacío
         return {"numero": num_int, "titulo": f"Tema del Discurso Nº {num_int} (Sin registrar en BD)"}
         
     return {"numero": bosquejo.numero, "titulo": bosquejo.titulo}
@@ -197,25 +192,15 @@ def actualizar_planificacion(id: int, datos: schemas.PlanificacionUpdate, db: Se
     db.refresh(item)
     return item
 
-#Actualizar Planificación con datos manuales
-class ActualizarAsignacionSchema(BaseModel):
-    orador_id: Optional[int] = None
-    nombre_orador: str
-    telefono: Optional[str] = ""
-    congregacion: str
-    bosquejo_numero: int
-    bosquejo_titulo: str
 
 @router.put("/planificacion/{fecha_id}")
 def actualizar_planificacion_manual(fecha_id: int, datos: schemas.PlanificacionUpdate, db: Session = Depends(get_db)):
     """Actualiza, asigna o vacía manualmente un orador y su bosquejo en una fecha concreta"""
-    
     plan_item = db.query(models.Planificacion).filter(models.Planificacion.id == fecha_id).first()
     
     if not plan_item:
         raise HTTPException(status_code=404, detail="No se encuentra esa fecha en la planificación.")
     
-    # Actualizamos solo los campos que vengan en la petición (permite enviar null para borrar)
     datos_dict = datos.dict(exclude_unset=True)
     for key, value in datos_dict.items():
         setattr(plan_item, key, value)
@@ -228,6 +213,7 @@ def actualizar_planificacion_manual(fecha_id: int, datos: schemas.PlanificacionU
         "mensaje": "Planificación actualizada correctamente"
     }
 
+
 @router.delete("/{orador_id}")
 def eliminar_orador(orador_id: int, forzar: bool = False, db: Session = Depends(get_db)):
     orador = db.query(models.Orador).filter(models.Orador.id == orador_id).first()
@@ -238,21 +224,17 @@ def eliminar_orador(orador_id: int, forzar: bool = False, db: Session = Depends(
     if not forzar and orador.planificaciones:
         raise HTTPException(
             status_code=409, 
-            detail="Este orador tiene fechas asignadas en el planificador. ¿Estás seguro de que quieres borrarlo y eliminar todas suasignaciones?"
+            detail="Este orador tiene fechas asignadas en el planificador. ¿Estás seguro de que quieres borrarlo y eliminar todas sus asignaciones?"
         )
     
-    # 1. Guardamos el ID de la congregación antes de borrar al orador
     congregacion_id = orador.congregacion_id
 
-    # 2. Borramos al orador
     db.delete(orador)
     db.commit()
     
-    # 3. COMPROBACIÓN: Si tenía congregación, miramos si queda alguien más en ella
     if congregacion_id:
         oradores_restantes = db.query(models.Orador).filter(models.Orador.congregacion_id == congregacion_id).count()
         if oradores_restantes == 0:
-            # Si no queda nadie, borramos también la congregación para que desaparezca de la lista
             congregacion_a_borrar = db.query(models.Congregacion).filter(models.Congregacion.id == congregacion_id).first()
             if congregacion_a_borrar:
                 db.delete(congregacion_a_borrar)
@@ -260,9 +242,9 @@ def eliminar_orador(orador_id: int, forzar: bool = False, db: Session = Depends(
 
     return {"mensaje": "Orador y congregación vacía eliminados correctamente"}
 
+
 @router.get("/api/oradores/{orador_id}/discursos")
 def obtener_discursos_orador(orador_id: int, db: Session = Depends(get_db)):
-    """Devuelve los datos y los números/títulos de los discursos que prepara este orador"""
     orador = db.query(models.Orador).filter(models.Orador.id == orador_id).first()
     
     if not orador:
@@ -279,21 +261,16 @@ def limpiar_nombre_congregacion(nombre):
     if not nombre:
         return "Local"
     
-    # Unificar todos los tipos de guiones
     nombre_limpio = str(nombre).replace('\u2013', '-').replace('\u2014', '-').replace('\u2011', '-')
-    
-    # Quitar tildes y espacios extra
     nfkd = unicodedata.normalize('NFKD', nombre_limpio)
     sin_tildes = "".join([c for c in nfkd if not unicodedata.combining(c)])
     limpio = sin_tildes.strip().title()
     
     lower_val = limpio.lower()
     
-    # Solo rechazar si está vacío o es un guion suelto / texto nulo
     if lower_val in ['', 'nan', 'nat', 'none', '-', '--']:
         return "Local"
         
-    # Filtrar palabras de cargos si aparecen
     if any(w in lower_val for w in ['coordinador', 'coordinadora', 'cargo']):
         return "Local"
         
@@ -302,9 +279,6 @@ def limpiar_nombre_congregacion(nombre):
 
 @router.get("/sincronizar-db-desde-excel")
 def sincronizar_db_desde_excel(db: Session = Depends(get_db)):
-    """Sincroniza limpiamente congregaciones, oradores, cargos, teléfonos y discursos desde el Excel evitando duplicados"""
-    
- # Vaciar todo para empezar desde cero y eliminar duplicados acumulados
     db.query(models.DiscursoOrador).delete()
     db.query(models.Orador).delete()
     db.query(models.Congregacion).delete()
@@ -405,9 +379,7 @@ def sincronizar_db_desde_excel(db: Session = Depends(get_db)):
 
 @router.get("/sincronizar-bosquejos")
 def sincronizar_bosquejos_desde_excel(db: Session = Depends(get_db)):
-    """Lee el archivo Excel de bosquejos externo y actualiza los títulos en la base de datos"""
-    
-    archivo_bosquejos = "Titulos_discursos_publicos.xlsx"  # El nombre exacto de tu archivo
+    archivo_bosquejos = "Titulos_discursos_publicos.xlsx"
     
     if not os.path.exists(archivo_bosquejos):
         return {
@@ -417,12 +389,9 @@ def sincronizar_bosquejos_desde_excel(db: Session = Depends(get_db)):
 
     try:
         df_bosquejos = pd.read_excel(archivo_bosquejos)
-        
-        # Normalizar nombres de columnas para quitar tildes, puntos y espacios
         df_bosquejos.columns = df_bosquejos.columns.astype(str).str.strip().str.lower()
         df_bosquejos.columns = df_bosquejos.columns.str.replace('.', '', regex=False).str.replace('º', '', regex=False)
         
-        # Buscar columnas flexibles
         col_num = next((c for c in df_bosquejos.columns if 'n' in c or 'num' in c), df_bosquejos.columns[0])
         col_tit = next((c for c in df_bosquejos.columns if 'tit' in c or 'discurs' in c), df_bosquejos.columns[1])
             
@@ -458,6 +427,7 @@ def sincronizar_bosquejos_desde_excel(db: Session = Depends(get_db)):
     except Exception as e:
         return {"status": "error", "detalle": str(e)}
 
+
 class OradorUpdateSchema(BaseModel):
     nombre: Optional[str] = None
     telefono: Optional[str] = None
@@ -467,13 +437,11 @@ class OradorUpdateSchema(BaseModel):
 
 @router.put("/oradores/{orador_id}")
 def actualizar_orador(orador_id: int, datos: OradorUpdateSchema, db: Session = Depends(get_db)):
-    """Actualiza los datos de un orador existente, incluyendo su congregación y discursos"""
     orador = db.query(models.Orador).filter(models.Orador.id == orador_id).first()
     
     if not orador:
         raise HTTPException(status_code=404, detail="Orador no encontrado")
     
-    # Actualizar campos básicos si vienen en la petición
     if datos.nombre is not None:
         orador.nombre = datos.nombre.strip()
     if datos.telefono is not None:
@@ -481,7 +449,6 @@ def actualizar_orador(orador_id: int, datos: OradorUpdateSchema, db: Session = D
     if datos.congregacion_id is not None:
         orador.congregacion_id = datos.congregacion_id
         
-    # Si se envían discursos, actualizamos la relación (borramos los viejos y ponemos los nuevos)
     if datos.discursos is not None:
         db.query(models.DiscursoOrador).filter(models.DiscursoOrador.orador_id == orador_id).delete()
         for num_disc in datos.discursos:
@@ -492,12 +459,13 @@ def actualizar_orador(orador_id: int, datos: OradorUpdateSchema, db: Session = D
     
     return {"status": "success", "mensaje": "Orador actualizado correctamente"}
 
+
 class CongregacionCreateSchema(BaseModel):
     nombre: str
 
+
 @router.post("/congregaciones", response_model=schemas.CongregacionOut)
 def crear_congregacion(datos: CongregacionCreateSchema, db: Session = Depends(get_db)):
-    """Crea una nueva congregación o la devuelve si ya existe"""
     nombre_limpio = datos.nombre.strip()
     
     existe = db.query(models.Congregacion).filter(models.Congregacion.nombre.ilike(nombre_limpio)).first()
@@ -511,11 +479,8 @@ def crear_congregacion(datos: CongregacionCreateSchema, db: Session = Depends(ge
     return nueva
 
 
-#Histórico de discursos por año
-
 @router.get("/historico")
 def obtener_historico_discursos(db: Session = Depends(get_db)):
-    """Devuelve una matriz histórica de discursos por año basada en la planificación"""
     planificaciones = db.query(models.Planificacion).filter(
         models.Planificacion.numero_bosquejo.isnot(None)
     ).all()
@@ -541,7 +506,33 @@ def obtener_historico_discursos(db: Session = Depends(get_db)):
     return resultado
 
 
-#LOGIN Y CREACIÓN DE USUARIOS
+@router.get("/historico/bosquejo/{numero_bosquejo}")
+def verificar_ultima_fecha_bosquejo(numero_bosquejo: int, db: Session = Depends(get_db)):
+    """Comprueba cuándo fue la última vez que se impartió un número de bosquejo específico en menos de un año"""
+    limite_un_anio = date.today() - timedelta(days=365)
+    
+    ultima_asignacion = (
+        db.query(models.Planificacion)
+        .filter(
+            models.Planificacion.numero_bosquejo == numero_bosquejo,
+            models.Planificacion.fecha >= limite_un_anio,
+            models.Planificacion.fecha <= date.today()
+        )
+        .order_by(models.Planificacion.fecha.desc())
+        .first()
+    )
+    
+    if ultima_asignacion:
+        return {
+            "encontrado_reciente": True,
+            "ultima_fecha": ultima_asignacion.fecha.strftime("%Y-%m-%d")
+        }
+    
+    return {
+        "encontrado_reciente": False,
+        "ultima_fecha": None
+    }
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -559,6 +550,7 @@ def login(datos: schemas.LoginSchema, db: Session = Depends(get_db)):
         "rol": usuario.rol,
         "mensaje": "Login exitoso"
     }
+
 
 @router.post("/auth/crear-usuario")
 def crear_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
