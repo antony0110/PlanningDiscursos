@@ -59,7 +59,8 @@ def importar_archivo(nombre_archivo, anio_objetivo):
     df = pd.read_excel(nombre_archivo, skiprows=header_idx)
     df.columns = df.columns.astype(str).str.strip()
 
-    creados = 0
+    # Lista temporal para acumular y ordenar antes de insertar
+    registros_temporales = []
 
     for _, row in df.iterrows():
         val_fecha = None
@@ -94,7 +95,7 @@ def importar_archivo(nombre_archivo, anio_objetivo):
             texto_evento = orador_nombre
             orador_nombre = "Desconocido"
 
-        # Congregación con normalización estricta para evitar duplicados
+        # Congregación
         cong_raw = "Propia"
         for col in df.columns:
             if 'congregac' in col.lower():
@@ -104,33 +105,9 @@ def importar_archivo(nombre_archivo, anio_objetivo):
                 break
 
         cong_nombre_limpio = limpiar_nombre_congregacion(cong_raw)
-        clave_actual = generar_clave_normalizada(cong_nombre_limpio)
-
-        congregacion_db = None
-        todas_cong = db.query(models.Congregacion).all()
-        for c in todas_cong:
-            if generar_clave_normalizada(c.nombre) == clave_actual:
-                congregacion_db = c
-                break
-
-        if not congregacion_db:
-            congregacion_db = models.Congregacion(nombre=cong_nombre_limpio)
-            db.add(congregacion_db)
-            db.commit()
-            db.refresh(congregacion_db)
-
-        orador_db = None
-        if orador_nombre not in ["Desconocido", "Por asignar"]:
-            orador_db = db.query(models.Orador).filter(models.Orador.nombre.ilike(orador_nombre)).first()
-            if not orador_db:
-                orador_db = models.Orador(nombre=orador_nombre, telefono="", congregacion_id=congregacion_db.id)
-                db.add(orador_db)
-                db.commit()
-                db.refresh(orador_db)
 
         # Bosquejo
         num_bosquejo = None
-        titulo_bosquejo = ""
         for col in df.columns:
             if 'bosquejo' in col.lower() or 'tema' in col.lower():
                 v = row.get(col)
@@ -139,7 +116,6 @@ def importar_archivo(nombre_archivo, anio_objetivo):
                     match = re.match(r'^(\d+)[\.\-\s]+(.*)', tema_raw)
                     if match:
                         num_bosquejo = int(match.group(1))
-                        titulo_bosquejo = match.group(2).strip()
                     elif tema_raw.isdigit():
                         num_bosquejo = int(tema_raw)
                     break
@@ -153,21 +129,61 @@ def importar_archivo(nombre_archivo, anio_objetivo):
                     estado_inv = "Enviada"
                 break
 
+        registros_temporales.append({
+            'fecha': val_fecha,
+            'orador_nombre': orador_nombre,
+            'cong_nombre': cong_nombre_limpio,
+            'num_bosquejo': num_bosquejo,
+            'estado_inv': estado_inv,
+            'es_evento': es_evento,
+            'texto_evento': texto_evento
+        })
+
+    # Ordenar los registros: Primero por fecha, y para una misma fecha, 
+    # ponemos los que NO son "Por asignar" primero (peso 0) y los "Por asignar" después (peso 1).
+    registros_temporales.sort(key=lambda x: (x['fecha'], 0 if x['orador_nombre'] not in ["Por asignar", "Desconocido"] else 1))
+
+    creados = 0
+    for reg in registros_temporales:
+        # Gestionar Congregación
+        clave_actual = generar_clave_normalizada(reg['cong_nombre'])
+        congregacion_db = None
+        for c in db.query(models.Congregacion).all():
+            if generar_clave_normalizada(c.nombre) == clave_actual:
+                congregacion_db = c
+                break
+
+        if not congregacion_db:
+            congregacion_db = models.Congregacion(nombre=reg['cong_nombre'])
+            db.add(congregacion_db)
+            db.commit()
+            db.refresh(congregacion_db)
+
+        # Gestionar Orador
+        orador_db = None
+        if reg['orador_nombre'] not in ["Desconocido", "Por asignar"]:
+            orador_db = db.query(models.Orador).filter(models.Orador.nombre.ilike(reg['orador_nombre'])).first()
+            if not orador_db:
+                orador_db = models.Orador(nombre=reg['orador_nombre'], telefono="", congregacion_id=congregacion_db.id)
+                db.add(orador_db)
+                db.commit()
+                db.refresh(orador_db)
+
         nueva_plan = models.Planificacion(
-            fecha=val_fecha,
+            fecha=reg['fecha'],
             id_orador=orador_db.id if orador_db else None,
-            numero_bosquejo=num_bosquejo,
-            estado_invitacion=estado_inv,
+            numero_bosquejo=reg['num_bosquejo'],
+            estado_invitacion=reg['estado_inv'],
             estado_confirmacion="Confirmado",
-            es_evento_especial=es_evento,
-            texto_evento=texto_evento
+            es_evento_especial=reg['es_evento'],
+            texto_evento=reg['texto_evento']
         )
         db.add(nueva_plan)
         creados += 1
 
     db.commit()
     db.close()
-    print(f"✅ ¡Importados {creados} registros para el año {anio_objetivo} con éxito!")
+    print(f"✅ ¡Importados {creados} registros ordenados para el año {anio_objetivo} con éxito!")
 
 if __name__ == "__main__":
     importar_archivo("PlanAnual2025_Limpio.xlsx", 2025)

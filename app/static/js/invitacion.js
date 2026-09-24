@@ -12,8 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!num) {
                 if (inputTitulo) inputTitulo.value = '';
+                // Limpiar aviso de discurso si no hay selección
+                const avisoDiv = document.getElementById('avisoAntiguedadDiscurso');
+                if (avisoDiv) avisoDiv.style.display = 'none';
                 return;
             }
+
+            // Llamamos a la validación del discurso al cambiar de número
+            await verificarAntiguedadDiscurso();
 
             try {
                 const res = await fetch(`/api/bosquejos/${num}`);
@@ -21,6 +27,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (inputTitulo) inputTitulo.value = data.titulo || '';
             } catch (err) {
                 console.error("Error al obtener el bosquejo:", err);
+            }
+        });
+    }
+
+    // ⭐ CORRECCIÓN: Listener para limpiar automáticamente al cambiar o escribir el orador
+    const inputOradorElem = document.getElementById('pdfOradorNombre');
+    if (inputOradorElem) {
+        inputOradorElem.addEventListener('input', function() {
+            // 1. Resetear el selector de números de discurso a su estado inicial
+            const selectBosquejo = document.getElementById('pdfNumDiscurso');
+            if (selectBosquejo) {
+                selectBosquejo.innerHTML = '<option value="">Selecciona un bosquejo...</option>';
+                selectBosquejo.value = '';
+            }
+
+            // 2. Vaciar el título del discurso que se autocompleta
+            const inputTitulo = document.getElementById('pdfTituloDiscurso');
+            if (inputTitulo) {
+                inputTitulo.value = '';
+            }
+
+            // 3. Ocultar y limpiar el cuadro de advertencia del discurso
+            const avisoBosquejoDiv = document.getElementById('avisoAntiguedadDiscurso');
+            if (avisoBosquejoDiv) {
+                avisoBosquejoDiv.innerHTML = '';
+                avisoBosquejoDiv.style.display = 'none';
+            }
+
+            // 4. Ocultar y limpiar el cuadro de advertencia del orador
+            const avisoOradorDiv = document.getElementById('avisoAntiguedadOrador');
+            if (avisoOradorDiv) {
+                avisoOradorDiv.innerHTML = '';
+                avisoOradorDiv.style.display = 'none';
             }
         });
     }
@@ -71,7 +110,7 @@ function actualizarDatalist(filtro) {
 }
 
 // 3. Función ejecutada cada vez que el usuario escribe un carácter
-function alSeleccionarOrador(valorIngresado) {
+async function alSeleccionarOrador(valorIngresado) {
     // Re-filtrar el desplegable dinámicamente
     actualizarDatalist(valorIngresado);
 
@@ -86,8 +125,15 @@ function alSeleccionarOrador(valorIngresado) {
     if (!oradorEncontrado) {
         selectNum.innerHTML = '<option value="">Selecciona un bosquejo...</option>';
         if (inputTitulo) inputTitulo.value = '';
+        
+        // Ocultar el aviso del orador si aún no se ha seleccionado uno válido
+        const avisoOradorDiv = document.getElementById('avisoAntiguedadOrador');
+        if (avisoOradorDiv) avisoOradorDiv.style.display = 'none';
         return;
     }
+
+    // Validación de la antigüedad de los 2 años del orador
+    await verificarAntiguedadOrador(oradorEncontrado.nombre);
 
     // Cargar discursos del orador seleccionado
     const discursos = oradorEncontrado.discursos || [];
@@ -120,7 +166,6 @@ function enviarWhatsAppDirecto() {
     const orador = oradoresCargados.find(o => normalizarTexto(o.nombre) === valorNorm);
     const telefonoLimpio = orador?.telefono ? String(orador.telefono).replace(/\D/g, '') : '';
 
-    // Extraemos solo el primer nombre (ej: "Enrique") para un saludo más cercano
     const primerNombre = oradorNombre.trim().split(' ')[0];
 
     const mensaje = `Hola buenos días ${primerNombre} :\n\n` +
@@ -137,6 +182,7 @@ function enviarWhatsAppDirecto() {
     const url = `https://api.whatsapp.com/send?phone=${telefonoFinal}&text=${encodeURIComponent(mensaje)}`;
     window.open(url, '_blank');
 }
+
 // 5. Descargar PDF
 function generarPDFDirecto() {
     const oradorNombre = document.getElementById('pdfOradorNombre')?.value;
@@ -154,20 +200,19 @@ function generarPDFDirecto() {
     window.open(url, '_blank');
 }
 
+// 6. Validación del DISCURSO (< 1 año O asignado a futuro)
 async function verificarAntiguedadDiscurso() {
     const selectBosquejo = document.getElementById('pdfNumDiscurso');
     const avisoDiv = document.getElementById('avisoAntiguedadDiscurso');
+    if (!avisoDiv || !selectBosquejo) return;
     
     const valorSeleccionado = selectBosquejo.value;
-    
     if (!valorSeleccionado) {
         avisoDiv.style.display = 'none';
         return;
     }
 
-    // Extraer únicamente los dígitos del valor seleccionado
     const numeroBosquejo = valorSeleccionado.replace(/\D/g, '');
-    
     if (!numeroBosquejo) {
         avisoDiv.style.display = 'none';
         return;
@@ -186,11 +231,53 @@ async function verificarAntiguedadDiscurso() {
             avisoDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning"></i> ⚠️ Este discurso se ha hecho hace menos de un año (última vez el <strong>${fechaFormateada}</strong>).`;
             avisoDiv.className = "form-text text-danger fw-semibold mt-1";
             avisoDiv.style.display = "block";
+        } else if (data.asignado_futuro && data.fecha_futura) {
+            const partes = data.fecha_futura.split('-');
+            const fechaFuturaFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            
+            avisoDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning"></i> ⚠️ Este discurso ya está programado a futuro en el panel (el <strong>${fechaFuturaFormateada}</strong>).`;
+            avisoDiv.className = "form-text text-warning fw-semibold mt-1";
+            avisoDiv.style.display = "block";
         } else {
             avisoDiv.style.display = "none";
         }
     } catch (error) {
         console.error("Error al comprobar la antigüedad del discurso:", error);
         avisoDiv.style.display = "none";
+    }
+}
+
+// 7. Validación del ORADOR
+async function verificarAntiguedadOrador(nombreOrador) {
+    const avisoOradorDiv = document.getElementById('avisoAntiguedadOrador'); 
+    if (!avisoOradorDiv) return;
+
+    const valorNorm = normalizarTexto(nombreOrador);
+    const oradorEncontrado = oradoresCargados.find(o => normalizarTexto(o.nombre) === valorNorm);
+
+    if (!oradorEncontrado) {
+        avisoOradorDiv.style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/historico/orador?nombre=${encodeURIComponent(nombreOrador)}`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        
+        if (data.encontrado_en_rango && data.ultima_fecha) {
+            const partes = data.ultima_fecha.split('-');
+            const fechaFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            
+            avisoOradorDiv.innerHTML = `<i class="bi bi-info-circle-fill text-info"></i> Este orador vino recientemente (última vez el <strong>${fechaFormateada}</strong>).`;
+            avisoOradorDiv.className = "form-text text-info fw-semibold mt-1";
+            avisoOradorDiv.style.display = "block";
+        } else {
+            avisoOradorDiv.style.display = "none";
+        }
+    } catch (error) {
+        console.error("Error al comprobar la antigüedad del orador:", error);
+        avisoOradorDiv.style.display = "none";
     }
 }

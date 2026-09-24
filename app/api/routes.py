@@ -18,6 +18,7 @@ from app.db.models import Bosquejo
 from passlib.hash import pbkdf2_sha256
 from passlib.context import CryptContext
 
+
 router = APIRouter()
 
 
@@ -508,15 +509,17 @@ def obtener_historico_discursos(db: Session = Depends(get_db)):
 
 @router.get("/historico/bosquejo/{numero_bosquejo}")
 def verificar_ultima_fecha_bosquejo(numero_bosquejo: int, db: Session = Depends(get_db)):
-    """Comprueba cuándo fue la última vez que se impartió un número de bosquejo específico en menos de un año"""
-    limite_un_anio = date.today() - timedelta(days=365)
+    """Comprueba cuándo fue la última vez que se impartió un bosquejo y si está programado a futuro"""
+    hoy = date.today()
+    limite_un_anio = hoy - timedelta(days=365)
     
+    # 1. Comprobar si se hizo en el último año (menos de un año)
     ultima_asignacion = (
         db.query(models.Planificacion)
         .filter(
             models.Planificacion.numero_bosquejo == numero_bosquejo,
             models.Planificacion.fecha >= limite_un_anio,
-            models.Planificacion.fecha <= date.today()
+            models.Planificacion.fecha <= hoy
         )
         .order_by(models.Planificacion.fecha.desc())
         .first()
@@ -525,14 +528,66 @@ def verificar_ultima_fecha_bosquejo(numero_bosquejo: int, db: Session = Depends(
     if ultima_asignacion:
         return {
             "encontrado_reciente": True,
-            "ultima_fecha": ultima_asignacion.fecha.strftime("%Y-%m-%d")
+            "ultima_fecha": ultima_asignacion.fecha.strftime("%Y-%m-%d"),
+            "asignado_futuro": False,
+            "fecha_futura": None
+        }
+    
+    # 2. Comprobar si ya está programado a futuro (más adelante que hoy)
+    registro_futuro = (
+        db.query(models.Planificacion)
+        .filter(
+            models.Planificacion.numero_bosquejo == numero_bosquejo,
+            models.Planificacion.fecha > hoy
+        )
+        .order_by(models.Planificacion.fecha.asc())
+        .first()
+    )
+    
+    if registro_futuro:
+        return {
+            "encontrado_reciente": False,
+            "ultima_fecha": None,
+            "asignado_futuro": True,
+            "fecha_futura": registro_futuro.fecha.strftime("%Y-%m-%d")
         }
     
     return {
         "encontrado_reciente": False,
-        "ultima_fecha": None
+        "ultima_fecha": None,
+        "asignado_futuro": False,
+        "fecha_futura": None
     }
 
+from datetime import date, timedelta
+
+@router.get("/historico/orador")
+def verificar_historico_orador(nombre: str, db: Session = Depends(get_db)):
+    hoy = date.today()
+    
+    # Hacemos join con Orador para filtrar por su nombre real
+    ultima_vez = db.query(models.Planificacion).join(
+        models.Orador, models.Planificacion.id_orador == models.Orador.id
+    ).filter(
+        models.Orador.nombre == nombre,
+        models.Planificacion.fecha <= hoy
+    ).order_by(models.Planificacion.fecha.desc()).first()
+    
+    if not ultima_vez:
+        return {"encontrado_en_rango": False, "ultima_fecha": None}
+        
+    diferencia_dias = (hoy - ultima_vez.fecha).days
+    
+    if diferencia_dias <= 730:
+        return {
+            "encontrado_en_rango": True,
+            "ultima_fecha": str(ultima_vez.fecha)
+        }
+    else:
+        return {
+            "encontrado_en_rango": False,
+            "ultima_fecha": str(ultima_vez.fecha)
+        }
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -569,3 +624,4 @@ def crear_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     db.refresh(nuevo_usuario)
     
     return {"status": "success", "mensaje": "Usuario creado correctamente"}
+

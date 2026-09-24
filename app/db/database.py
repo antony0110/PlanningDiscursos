@@ -2,16 +2,21 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Creamos la carpeta data si no existe
-os.makedirs("data", exist_ok=True)
-
-# Indicamos que la base de datos se guardará en data/planning.db
-DATABASE_URL = "sqlite:///./data/planning.db"
-
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False} # Requerido para SQLite en FastAPI
+# Si existe una variable de entorno DATABASE_URL (la que pondrá Render), la usa. 
+# Si no, usa la de tu Docker local.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql+psycopg://admin:1234@localhost:5432/PlanningDiscursosDB"
 )
+
+# Nota: Render a veces provee URLs que empiezan por "postgres://", 
+# SQLAlchemy requiere "postgresql://", así que hacemos este pequeño ajuste por seguridad:
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
+engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
