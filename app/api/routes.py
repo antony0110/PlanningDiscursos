@@ -550,8 +550,13 @@ def crear_congregacion(datos: CongregacionCreateSchema, db: Session = Depends(ge
 
 
 @router.get("/historico")
-def obtener_historico_discursos(db: Session = Depends(get_db)):
+def obtener_historico_discursos(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    # 🛡️ Filtramos estrictamente por la congregación del usuario logueado
     planificaciones = db.query(models.Planificacion).filter(
+        models.Planificacion.congregacion_id == current_user.congregacion_id,
         models.Planificacion.numero_bosquejo.isnot(None)
     ).all()
     
