@@ -14,7 +14,6 @@ from app.db.database import get_db
 from app.db import models, schemas
 from app.services.pdf_service import generar_pdf_invitacion
 from app.db.models import Bosquejo
-from passlib.context import CryptContext
 import bcrypt
 
 router = APIRouter()
