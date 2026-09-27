@@ -19,16 +19,50 @@ async function cargarPlanificacion() {
     const selector = document.getElementById('selectAnioPlan');
     const anio = (selector && selector.value) ? selector.value : new Date().getFullYear();
 
+    // Recuperamos el usuario logueado almacenado en localStorage
+    const usuarioLogueado = localStorage.getItem("username") || "";
+
+    // Cabeceras comunes para enviar la autenticación por usuario en cada petición
+    const headersConAuth = {
+        'X-Username': usuarioLogueado,
+        'Content-Type': 'application/json'
+    };
+
     try {
-        let res = await fetch(`/api/planificacion?anio=${anio}`);
+        let res = await fetch(`/api/planificacion?anio=${anio}`, {
+            method: 'GET',
+            headers: headersConAuth
+        });
         let lista = await res.json();
 
         if (lista.length === 0) {
-            await fetch(`/api/planificacion/generar-anio/${anio}`, { method: 'POST' });
-            res = await fetch(`/api/planificacion?anio=${anio}`);
+            // Preguntamos al usuario el día de su reunión
+            let respuesta = prompt("No hay planificación para este año.\n¿Qué día tenéis la reunión?\nEscribe 'Sábado' o 'Domingo':", "Domingo");
+            
+            // Si el usuario le da a cancelar, salimos para evitar errores
+            if (respuesta === null) return; 
+
+            // 5 = Sábado, 6 = Domingo (por defecto)
+            let diaReunion = 6; 
+            let limpio = respuesta.toLowerCase().trim();
+
+            // Comprobamos 'sab' o 'sáb' para que funcione con o sin tilde
+            if (limpio.includes('sab') || limpio.includes('sáb')) {
+                diaReunion = 5;
+            }
+
+            await fetch(`/api/planificacion/generar-anio/${anio}?dia_reunion=${diaReunion}`, { 
+                method: 'POST',
+                headers: headersConAuth 
+            });
+            
+            res = await fetch(`/api/planificacion?anio=${anio}`, {
+                method: 'GET',
+                headers: headersConAuth
+            });
             lista = await res.json();
         }
-
+        
         const contenedor = document.getElementById('tablaPlanificacionBody');
         if (!contenedor) return;
         contenedor.innerHTML = '';
@@ -602,3 +636,6 @@ function toggleCamposEventoEspecial() {
         bloqueNormales.style.display = 'block';
     }
 }
+
+
+

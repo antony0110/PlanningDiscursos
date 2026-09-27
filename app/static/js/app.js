@@ -1,5 +1,31 @@
 let listaOradoresGlobal = [];
 
+// --- Interceptor global de fetch para inyectar automáticamente la cabecera X-Username ---
+const originalFetch = window.fetch;
+window.fetch = async function(url, options = {}) {
+    options.headers = options.headers || {};
+    
+    // Obtenemos el usuario guardado al hacer login
+    const usuarioLogueado = localStorage.getItem("usuario") || "";
+
+    // Si las cabeceras son un objeto plano
+    if (!(options.headers instanceof Headers)) {
+        if (!options.headers['X-Username'] && usuarioLogueado) {
+            options.headers['X-Username'] = usuarioLogueado;
+        }
+    } else {
+        // Si utiliza la clase Headers de JS
+        if (!options.headers.has('X-Username') && usuarioLogueado) {
+            options.headers.append('X-Username', usuarioLogueado);
+        }
+    }
+
+    // Ejecutamos el fetch original con la cabecera ya incluida
+    return originalFetch(url, options);
+};
+
+// --- A partir de aquí sigue el resto de tu código normal de app.js ---
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Asignar el próximo domingo por defecto en los inputs de fecha
     const hoy = new Date();

@@ -63,6 +63,7 @@ class UsuarioCreate(BaseModel):
     username: str
     password: str
     rol: Optional[str] = "invitado"
+    congregacion_id: Optional[int] = None
 
 class UsuarioLogin(BaseModel):
     username: str

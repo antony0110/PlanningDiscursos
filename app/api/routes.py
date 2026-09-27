@@ -21,16 +21,15 @@ router = APIRouter()
 
 # --- FUNCIÓN DE DEPENDENCIAS (Definida arriba para que esté disponible) ---
 def get_current_user(x_username: Optional[str] = Header(None), db: Session = Depends(get_db)):
-    """Obtiene el usuario actual basado en la cabecera X-Username o selecciona el primero por defecto"""
-    if x_username:
-        usuario = db.query(models.Usuario).filter(models.Usuario.username == x_username).first()
-        if usuario:
-            return usuario
-            
-    usuario_default = db.query(models.Usuario).first()
-    if not usuario_default:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No hay usuarios registrados en el sistema")
-    return usuario_default
+    """Obtiene el usuario actual basándose estrictamente en la cabecera X-Username"""
+    if not x_username:
+        raise HTTPException(status_code=401, detail="Falta la cabecera de autenticación del usuario")
+    
+    usuario = db.query(models.Usuario).filter(models.Usuario.username == x_username).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado en el sistema")
+        
+    return usuario
 # --------------------------------------------------------------------------
 
 
@@ -146,6 +145,25 @@ def obtener_planificacion(
     db: Session = Depends(get_db),
     usuario_actual: models.Usuario = Depends(get_current_user)
 ):
+    # Determinamos qué congregación vamos a consultar/gestionar
+    target_congregacion_id = congregacion_id if congregacion_id else usuario_actual.congregacion_id
+    
+    # Año objetivo (si no se pasa, usamos el actual, por ejemplo 2026)
+    target_anio = anio if anio else date.today().year
+
+    # 1. Comprobamos si existen planificaciones para esta congregación en este año
+    existe_planificacion = db.query(models.Planificacion).filter(
+        models.Planificacion.congregacion_id == target_congregacion_id,
+        models.Planificacion.fecha >= date(target_anio, 1, 1),
+        models.Planificacion.fecha <= date(target_anio, 12, 31)
+    ).first() # <--- Aquí cerramos bien el paréntesis y el .first()
+
+    # 2. Si NO tiene ninguna planificación, ejecutamos la función que autogenera el calendario
+    if not existe_planificacion:
+        # ⚠️ (Aquí llamas a tu función de autogenerado si la tienes creada, o déjalo con pass de momento)
+        pass
+
+    # 3. Construimos la consulta habitual para devolver los datos a la tabla
     query = db.query(
         models.Planificacion.id,
         models.Planificacion.fecha,
@@ -164,10 +182,8 @@ def obtener_planificacion(
      .outerjoin(models.Congregacion, models.Orador.congregacion_id == models.Congregacion.id)\
      .outerjoin(models.Bosquejo, models.Planificacion.numero_bosquejo == models.Bosquejo.numero)
 
-    if congregacion_id:
-        query = query.filter(models.Planificacion.congregacion_id == congregacion_id)
-    else:
-        query = query.filter(models.Planificacion.congregacion_id == usuario_actual.congregacion_id)
+    # Filtramos por la congregación correspondiente
+    query = query.filter(models.Planificacion.congregacion_id == target_congregacion_id)
 
     if anio:
         query = query.filter(
@@ -177,14 +193,13 @@ def obtener_planificacion(
 
     return query.order_by(models.Planificacion.fecha.asc()).all()
 
-
 @router.post("/planificacion/generar-anio/{anio}")
 def generar_planificacion_anio(
     anio: int, 
+    dia_reunion: int = 6, # 5 para Sábado, 6 para Domingo (por defecto domingo)
     db: Session = Depends(get_db),
-    usuario_actual: models.Usuario = Depends(get_current_user) # <--- Inyectamos el usuario
+    usuario_actual: models.Usuario = Depends(get_current_user)
 ):
-    # Comprobamos si YA existen registros para ESTA congregación en este año
     existentes = db.query(models.Planificacion).filter(
         models.Planificacion.congregacion_id == usuario_actual.congregacion_id,
         models.Planificacion.fecha >= date(anio, 1, 1),
@@ -195,7 +210,9 @@ def generar_planificacion_anio(
         return {"message": f"El año {anio} ya existía para tu congregación."}
 
     fecha_actual = date(anio, 1, 1)
-    while fecha_actual.weekday() != 6: # Buscamos el primer domingo
+    
+    # Buscamos el primer día de reunión que nos haya indicado el usuario
+    while fecha_actual.weekday() != dia_reunion:
         fecha_actual += timedelta(days=1)
 
     nuevas_fechas = []
@@ -205,14 +222,14 @@ def generar_planificacion_anio(
                 fecha=fecha_actual,
                 estado_invitacion="No enviada",
                 estado_confirmacion="Pendiente",
-                congregacion_id=usuario_actual.congregacion_id # <--- ¡Clave! Asignamos la congregación del usuario
+                congregacion_id=usuario_actual.congregacion_id
             )
         )
-        fecha_actual += timedelta(days=7)
+        fecha_actual += timedelta(days=7) # Salto semanal exacto
 
     db.add_all(nuevas_fechas)
     db.commit()
-    return {"message": f"Año {anio} generado correctamente para tu congregación."}
+    return {"message": f"Año {anio} generado correctamente."}
 
 
 @router.patch("/planificacion/{id}")
@@ -636,10 +653,6 @@ def verificar_historico_orador(nombre: str, db: Session = Depends(get_db)):
             "encontrado_en_rango": False,
             "ultima_fecha": str(ultima_vez.fecha)
         }
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 @router.post("/auth/login")
 def login(datos: schemas.LoginSchema, db: Session = Depends(get_db)):

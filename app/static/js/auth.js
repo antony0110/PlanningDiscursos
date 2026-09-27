@@ -92,9 +92,10 @@ async function ejecutarLogin() {
             
             localStorage.setItem('sesion_activa', 'true');
             
-            cambiarVistaSesion(true, rolAsignado);
-            if (typeof cargarCongregaciones === 'function') cargarCongregaciones();
-            if (typeof filtrarPorCongregacion === 'function') filtrarPorCongregacion();
+            // 🚀 SOLUCIÓN: Recargamos la página limpiamente para que la app 
+            // arranque con las credenciales aplicadas y el interceptor activo.
+            location.reload();
+            
         } else {
             let mensajeError = data.detail || "Usuario o contraseña incorrectos.";
             if (errorDiv) {
