@@ -9,8 +9,10 @@ class Congregacion(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, unique=True, nullable=False, index=True)
 
-    # Relación con los oradores
-    oradores = relationship("Orador", back_populates="congregacion_rel")
+    # Relaciones inversas
+    oradores = relationship("Orador", back_populates="congregacion_rel", cascade="all, delete-orphan")
+    usuarios = relationship("Usuario", back_populates="congregacion_rel", cascade="all, delete-orphan")
+    planificaciones = relationship("Planificacion", back_populates="congregacion_rel", cascade="all, delete-orphan")
 
 
 class Orador(Base):
@@ -29,10 +31,8 @@ class Orador(Base):
     # Relaciones
     congregacion_rel = relationship("Congregacion", back_populates="oradores")
     discursos = relationship("DiscursoOrador", back_populates="orador", cascade="all, delete-orphan")
-    
-    # AÑADE ESTA LÍNEA: Relación con planificacion (asumiendo backref o back_populates si lo tienes en Planificacion)
     planificaciones = relationship("Planificacion", backref="orador_rel", cascade="all, delete-orphan")
-
+    
     
 class DiscursoOrador(Base):
     """Guarda qué discursos (números de bosquejo) tiene preparados cada orador"""
@@ -44,8 +44,6 @@ class DiscursoOrador(Base):
 
     orador = relationship("Orador", back_populates="discursos")
 
-    from sqlalchemy import Column, Integer, String
-    from app.db.database import Base
 
 class Bosquejo(Base):
     __tablename__ = "bosquejos"
@@ -67,6 +65,10 @@ class Planificacion(Base):
     token_confirmacion = Column(String, unique=True, nullable=True)
     es_evento_especial = Column(Boolean, default=False)
     texto_evento = Column(String, nullable=True)
+    
+    # Aislamiento por congregación
+    congregacion_id = Column(Integer, ForeignKey('congregaciones.id'), nullable=False)
+    congregacion_rel = relationship("Congregacion", back_populates="planificaciones")
 
 
 class Usuario(Base):
@@ -76,3 +78,7 @@ class Usuario(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     rol = Column(String, default="invitado")  # "admin" o "invitado"
+    
+    # Vinculación con su congregación
+    congregacion_id = Column(Integer, ForeignKey("congregaciones.id"), nullable=False)
+    congregacion_rel = relationship("Congregacion", back_populates="usuarios")

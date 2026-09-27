@@ -3,23 +3,36 @@ import pandas as pd
 import unicodedata
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 from datetime import date, timedelta
 from collections import defaultdict
 from pydantic import BaseModel
-from typing import Optional
 from app.db.database import get_db
 from app.db import models, schemas
 from app.services.pdf_service import generar_pdf_invitacion
 from app.db.models import Bosquejo
-from passlib.hash import pbkdf2_sha256
 from passlib.context import CryptContext
 
 
 router = APIRouter()
+
+
+# --- FUNCIÓN DE DEPENDENCIAS (Definida arriba para que esté disponible) ---
+def get_current_user(x_username: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    """Obtiene el usuario actual basado en la cabecera X-Username o selecciona el primero por defecto"""
+    if x_username:
+        usuario = db.query(models.Usuario).filter(models.Usuario.username == x_username).first()
+        if usuario:
+            return usuario
+            
+    usuario_default = db.query(models.Usuario).first()
+    if not usuario_default:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No hay usuarios registrados en el sistema")
+    return usuario_default
+# --------------------------------------------------------------------------
 
 
 @router.get("/congregaciones", response_model=List[schemas.CongregacionOut])
@@ -30,11 +43,16 @@ def listar_congregaciones(db: Session = Depends(get_db)):
 @router.get("/oradores", response_model=List[schemas.OradorOut])
 def listar_oradores(
     congregacion_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_actual: models.Usuario = Depends(get_current_user)  # Inyectamos el usuario logueado
 ):
     query = db.query(models.Orador).options(selectinload(models.Orador.discursos))
+    
     if congregacion_id:
         query = query.filter(models.Orador.congregacion_id == congregacion_id)
+    else:
+        query = query.filter(models.Orador.congregacion_id == usuario_actual.congregacion_id)
+        
     return query.all()
 
 
@@ -122,7 +140,12 @@ def obtener_bosquejo(numero: str, db: Session = Depends(get_db)):
 
 
 @router.get("/planificacion", response_model=List[schemas.PlanificacionResponse])
-def obtener_planificacion(anio: Optional[int] = None, db: Session = Depends(get_db)):
+def obtener_planificacion(
+    anio: Optional[int] = None, 
+    congregacion_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario_actual: models.Usuario = Depends(get_current_user)
+):
     query = db.query(
         models.Planificacion.id,
         models.Planificacion.fecha,
@@ -141,6 +164,11 @@ def obtener_planificacion(anio: Optional[int] = None, db: Session = Depends(get_
      .outerjoin(models.Congregacion, models.Orador.congregacion_id == models.Congregacion.id)\
      .outerjoin(models.Bosquejo, models.Planificacion.numero_bosquejo == models.Bosquejo.numero)
 
+    if congregacion_id:
+        query = query.filter(models.Planificacion.congregacion_id == congregacion_id)
+    else:
+        query = query.filter(models.Planificacion.congregacion_id == usuario_actual.congregacion_id)
+
     if anio:
         query = query.filter(
             models.Planificacion.fecha >= date(anio, 1, 1),
@@ -151,17 +179,23 @@ def obtener_planificacion(anio: Optional[int] = None, db: Session = Depends(get_
 
 
 @router.post("/planificacion/generar-anio/{anio}")
-def generar_planificacion_anio(anio: int, db: Session = Depends(get_db)):
+def generar_planificacion_anio(
+    anio: int, 
+    db: Session = Depends(get_db),
+    usuario_actual: models.Usuario = Depends(get_current_user) # <--- Inyectamos el usuario
+):
+    # Comprobamos si YA existen registros para ESTA congregación en este año
     existentes = db.query(models.Planificacion).filter(
+        models.Planificacion.congregacion_id == usuario_actual.congregacion_id,
         models.Planificacion.fecha >= date(anio, 1, 1),
         models.Planificacion.fecha <= date(anio, 12, 31)
     ).first()
 
     if existentes:
-        return {"message": f"El año {anio} ya existía."}
+        return {"message": f"El año {anio} ya existía para tu congregación."}
 
     fecha_actual = date(anio, 1, 1)
-    while fecha_actual.weekday() != 6:
+    while fecha_actual.weekday() != 6: # Buscamos el primer domingo
         fecha_actual += timedelta(days=1)
 
     nuevas_fechas = []
@@ -170,21 +204,32 @@ def generar_planificacion_anio(anio: int, db: Session = Depends(get_db)):
             models.Planificacion(
                 fecha=fecha_actual,
                 estado_invitacion="No enviada",
-                estado_confirmacion="Pendiente"
+                estado_confirmacion="Pendiente",
+                congregacion_id=usuario_actual.congregacion_id # <--- ¡Clave! Asignamos la congregación del usuario
             )
         )
         fecha_actual += timedelta(days=7)
 
     db.add_all(nuevas_fechas)
     db.commit()
-    return {"message": f"Año {anio} generado."}
+    return {"message": f"Año {anio} generado correctamente para tu congregación."}
 
 
 @router.patch("/planificacion/{id}")
-def actualizar_planificacion(id: int, datos: schemas.PlanificacionUpdate, db: Session = Depends(get_db)):
-    item = db.query(models.Planificacion).filter(models.Planificacion.id == id).first()
+def actualizar_planificacion(
+    id: int, 
+    datos: schemas.PlanificacionUpdate, 
+    db: Session = Depends(get_db),
+    usuario_actual: models.Usuario = Depends(get_current_user)
+):
+    # Opcional pero recomendado: Asegurar que la planificación pertenece a su congregación
+    item = db.query(models.Planificacion).filter(
+        models.Planificacion.id == id,
+        models.Planificacion.congregacion_id == usuario_actual.congregacion_id
+    ).first()
+    
     if not item:
-        raise HTTPException(status_code=404, detail="Fecha no encontrada")
+        raise HTTPException(status_code=404, detail="Fecha no encontrada o sin permisos")
     
     for key, value in datos.dict(exclude_unset=True).items():
         setattr(item, key, value)
@@ -195,12 +240,20 @@ def actualizar_planificacion(id: int, datos: schemas.PlanificacionUpdate, db: Se
 
 
 @router.put("/planificacion/{fecha_id}")
-def actualizar_planificacion_manual(fecha_id: int, datos: schemas.PlanificacionUpdate, db: Session = Depends(get_db)):
+def actualizar_planificacion_manual(
+    fecha_id: int, 
+    datos: schemas.PlanificacionUpdate, 
+    db: Session = Depends(get_db),
+    usuario_actual: models.Usuario = Depends(get_current_user)
+):
     """Actualiza, asigna o vacía manualmente un orador y su bosquejo en una fecha concreta"""
-    plan_item = db.query(models.Planificacion).filter(models.Planificacion.id == fecha_id).first()
+    plan_item = db.query(models.Planificacion).filter(
+        models.Planificacion.id == fecha_id,
+        models.Planificacion.congregacion_id == usuario_actual.congregacion_id
+    ).first()
     
     if not plan_item:
-        raise HTTPException(status_code=404, detail="No se encuentra esa fecha en la planificación.")
+        raise HTTPException(status_code=404, detail="No se encuentra esa fecha o no pertenece a tu congregación.")
     
     datos_dict = datos.dict(exclude_unset=True)
     for key, value in datos_dict.items():
@@ -213,7 +266,6 @@ def actualizar_planificacion_manual(fecha_id: int, datos: schemas.PlanificacionU
         "status": "success",
         "mensaje": "Planificación actualizada correctamente"
     }
-
 
 @router.delete("/{orador_id}")
 def eliminar_orador(orador_id: int, forzar: bool = False, db: Session = Depends(get_db)):
@@ -513,7 +565,6 @@ def verificar_ultima_fecha_bosquejo(numero_bosquejo: int, db: Session = Depends(
     hoy = date.today()
     limite_un_anio = hoy - timedelta(days=365)
     
-    # 1. Comprobar si se hizo en el último año (menos de un año)
     ultima_asignacion = (
         db.query(models.Planificacion)
         .filter(
@@ -533,7 +584,6 @@ def verificar_ultima_fecha_bosquejo(numero_bosquejo: int, db: Session = Depends(
             "fecha_futura": None
         }
     
-    # 2. Comprobar si ya está programado a futuro (más adelante que hoy)
     registro_futuro = (
         db.query(models.Planificacion)
         .filter(
@@ -559,13 +609,11 @@ def verificar_ultima_fecha_bosquejo(numero_bosquejo: int, db: Session = Depends(
         "fecha_futura": None
     }
 
-from datetime import date, timedelta
 
 @router.get("/historico/orador")
 def verificar_historico_orador(nombre: str, db: Session = Depends(get_db)):
     hoy = date.today()
     
-    # Hacemos join con Orador para filtrar por su nombre real
     ultima_vez = db.query(models.Planificacion).join(
         models.Orador, models.Planificacion.id_orador == models.Orador.id
     ).filter(
@@ -589,6 +637,7 @@ def verificar_historico_orador(nombre: str, db: Session = Depends(get_db)):
             "ultima_fecha": str(ultima_vez.fecha)
         }
 
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -596,13 +645,20 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def login(datos: schemas.LoginSchema, db: Session = Depends(get_db)):
     usuario = db.query(models.Usuario).filter(models.Usuario.username == datos.username).first()
     
-    if not usuario or not pbkdf2_sha256.verify(datos.password, usuario.hashed_password):
-        raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
+    if not usuario or not pwd_context.verify(datos.password, usuario.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas"
+        )
         
+    # Obtenemos el nombre de la congregación gracias a la relación que tienes en models.py
+    nombre_congregacion = usuario.congregacion_rel.nombre if usuario.congregacion_rel else "Sin congregación"
+
     return {
         "status": "success",
         "username": usuario.username,
         "rol": usuario.rol,
+        "congregacion": nombre_congregacion, # <--- ¡Nuevo campo!
         "mensaje": "Login exitoso"
     }
 
@@ -617,11 +673,11 @@ def crear_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     nuevo_usuario = models.Usuario(
         username=datos.username.strip(),
         hashed_password=hashed_pwd,
-        rol=datos.rol
+        rol=datos.rol,
+        congregacion_id=datos.congregacion_id  # <--- ¡Importante para asignarlo a su congregación!
     )
     db.add(nuevo_usuario)
     db.commit()
     db.refresh(nuevo_usuario)
     
     return {"status": "success", "mensaje": "Usuario creado correctamente"}
-

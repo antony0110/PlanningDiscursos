@@ -12,11 +12,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inputFechaInv) inputFechaInv.value = fechaDefault;
     if (inputPdfFecha) inputPdfFecha.value = fechaDefault;
 
-    // 2. Mostrar por defecto la sección de discursantes al arrancar
-    cambiarSeccion('discursantes');
-
-    cargarCongregaciones();
-    filtrarPorCongregacion();
+    // 2. Comprobar sesión activa antes de cargar datos de la app
+    const usuario = localStorage.getItem('usuario');
+    const sesionActiva = localStorage.getItem('sesion_activa');
+    const rol = localStorage.getItem('rol');
+    
+    if (usuario && sesionActiva === 'true') {
+        if (typeof cambiarVistaSesion === 'function') {
+            cambiarVistaSesion(true, rol);
+        }
+        // 3. Mostrar por defecto la sección de discursantes y cargar datos
+        cambiarSeccion('discursantes');
+        cargarCongregaciones();
+        filtrarPorCongregacion();
+    } else {
+        if (typeof cambiarVistaSesion === 'function') {
+            cambiarVistaSesion(false);
+        }
+    }
 });
 
 
@@ -33,6 +46,7 @@ function cambiarSeccion(seccion) {
         cargarHistorico();
     }
 }
+
 // Cargar congregaciones en el desplegable de filtro
 async function cargarCongregaciones() {
     try {
@@ -141,122 +155,3 @@ function formatearFechaEspanol(fechaStr) {
     const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
     return fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 }
-
-//LOGIN
-
-// Mostrar u ocultar la pantalla de la aplicación según el estado de la sesión
-function cambiarVistaSesion(sesionActiva, rol = null) {
-    const loginScreen = document.getElementById('login-screen');
-    const appContainer = document.getElementById('app-container');
-
-    if (sesionActiva) {
-        if (loginScreen) {
-            loginScreen.classList.add('d-none');
-            loginScreen.style.display = 'none';
-        }
-        if (appContainer) {
-            appContainer.classList.remove('d-none');
-            appContainer.style.display = 'block';
-        }
-        if (rol === 'invitado') {
-            console.log("Modo Invitado: Solo lectura activado");
-        }
-    } else {
-        if (loginScreen) {
-            loginScreen.classList.remove('d-none');
-            loginScreen.style.display = 'flex';
-        }
-        if (appContainer) {
-            appContainer.classList.add('d-none');
-            appContainer.style.display = 'none';
-        }
-    }
-}
-
-// LOGIN
-async function ejecutarLogin() {
-    const usuario = document.getElementById('login-user').value.trim();
-    const password = document.getElementById('login-password').value.trim();
-    const errorDiv = document.getElementById('login-error');
-
-    errorDiv.style.display = 'none';
-    errorDiv.textContent = '';
-
-    try {
-        const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({
-                username: usuario,
-                password: password
-            })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            const rolAsignado = data.rol || 'admin';
-            localStorage.setItem('usuario', data.username || usuario);
-            localStorage.setItem('rol', rolAsignado);
-            localStorage.setItem('sesion_activa', 'true');
-            
-            cambiarVistaSesion(true, rolAsignado);
-            console.log("¡Login exitoso! Entrando a la aplicación...");
-        } else {
-            let mensajeError = "Usuario o contraseña incorrectos.";
-            if (data.detail) {
-                if (typeof data.detail === 'string') {
-                    mensajeError = data.detail;
-                } else if (Array.isArray(data.detail)) {
-                    mensajeError = data.detail.map(err => err.msg).join(', ');
-                }
-            }
-            
-            errorDiv.style.display = 'block';
-            errorDiv.textContent = mensajeError;
-        }
-    } catch (error) {
-        console.error("Error en la petición de login:", error);
-        errorDiv.style.display = 'block';
-        errorDiv.textContent = "Error de conexión con el servidor.";
-    }
-}
-
-// Ver/Ocultar contraseña
-function alternarVisibilidadPassword() {
-    const inputPass = document.getElementById('login-password');
-    const iconoOjo = document.getElementById('iconoOjo');
-    
-    if (inputPass.type === "password") {
-        inputPass.type = "text";
-        iconoOjo.classList.remove("bi-eye");
-        iconoOjo.classList.add("bi-eye-slash");
-    } else {
-        inputPass.type = "password";
-        iconoOjo.classList.remove("bi-eye-slash");
-        iconoOjo.classList.add("bi-eye");
-    }
-}
-
-// Cerrar sesión
-function cerrarSesion() {
-    localStorage.removeItem('sesion_activa');
-    localStorage.removeItem('usuario');
-    localStorage.removeItem('rol');
-    location.reload();
-}
-
-// Único listener al cargar la página
-document.addEventListener("DOMContentLoaded", () => {
-    const usuario = localStorage.getItem('usuario');
-    const sesionActiva = localStorage.getItem('sesion_activa');
-    const rol = localStorage.getItem('rol');
-    
-    if (usuario && sesionActiva === 'true') {
-        cambiarVistaSesion(true, rol);
-    } else {
-        cambiarVistaSesion(false);
-    }
-});

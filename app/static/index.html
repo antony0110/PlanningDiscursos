@@ -49,6 +49,10 @@
 </head>
 <body>
 
+    <!-- Arriba a la derecha (Usuario) -->
+    <div style="position: fixed; top: 15px; right: 20px; z-index: 1000; background: white; padding: 5px 12px; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 14px;">
+        👤 <span id="display-username" style="font-weight: bold; color: #333;">Usuario</span>
+    </div>
     <!-- 1. PANTALLA DE LOGIN INDEPENDIENTE (PUERTA DE ENTRADA) -->
     <div id="login-screen" class="container-fluid d-flex justify-content-center align-items-center vh-100 bg-light" style="position: fixed; top: 0; left: 0; z-index: 9999; display: none;">
         <div class="card p-4 shadow" style="width: 380px;">
@@ -68,7 +72,48 @@
             </div>
             <div id="login-error" class="text-danger small mb-3" style="display: none;"></div>
             <button type="button" class="btn btn-primary w-100" onclick="ejecutarLogin()">Entrar</button>
+            <button type="button" class="btn btn-link w-100 text-muted text-decoration-none small" onclick="mostrarRegistro()">¿No tienes cuenta? Regístrate</button>
         </div>
+    </div>
+
+    <!-- PANTALLA DE REGISTRO NUEVA -->
+
+    <div id="register-screen" class="container-fluid d-flex justify-content-center align-items-center vh-100 bg-light" style="position: fixed; top: 0; left: 0; z-index: 9999; display: none;">
+    <div class="card p-4 shadow" style="width: 400px;">
+        <h3 class="text-center mb-4"><i class="bi bi-person-plus me-2 text-primary"></i>Nuevo Registro</h3>
+        
+        <div class="mb-3">
+            <label class="form-label">Usuario</label>
+            <input type="text" id="reg-user" class="form-control" placeholder="Elige tu usuario">
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Contraseña</label>
+            <input type="password" id="reg-password" class="form-control" placeholder="Elige una contraseña">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Congregación</label>
+            <select id="reg-congregacion" class="form-select">
+                <option value="">Selecciona tu congregación...</option>
+                <option value="nueva" class="text-primary fw-bold">➕ Crear nueva congregación...</option>
+            </select>
+        </div>
+
+        <!-- CAMPO OCULTO QUE APARECE AL SELECCIONAR "CREAR NUEVA" -->
+        <div class="mb-3 d-none" id="div-nueva-congregacion">
+            <label class="form-label text-primary fw-bold">Nombre de la nueva congregación</label>
+            <div class="input-group">
+                <input type="text" id="reg-nueva-congregacion-nombre" class="form-control" placeholder="Ej. Valencia Centro">
+                <button class="btn btn-outline-primary" type="button" onclick="guardarNuevaCongregacionRapida()">Añadir</button>
+            </div>
+        </div>
+
+        <div id="reg-error" class="text-danger small mb-3" style="display: none;"></div>
+        
+        <button type="button" class="btn btn-primary w-100 mb-2" onclick="ejecutarRegistro()">Registrarse</button>
+        <button type="button" class="btn btn-link w-100 text-muted text-decoration-none small" onclick="mostrarLogin()">¿Ya tienes cuenta? Inicia sesión</button>
+    </div>
     </div>
 
     <!-- 2. CONTENEDOR PRINCIPAL DE LA APLICACIÓN (OCULTO HASTA AUTENTICARSE) -->
@@ -114,7 +159,10 @@
                 </li>
             </ul>
             <hr class="text-secondary">
-            <div class="small text-white-50 px-2 mb-3">Congregación Algemesí</div>
+            <!-- Aquí se mostrará la congregación activa -->
+            <div class="px-3 mb-2 text-white-55 small" id="display-congregation">
+                Congregación: Cargando...
+            </div>
             <!-- Botón de cerrar sesión integrado en escritorio -->
             <button class="btn btn-outline-light btn-sm w-100 d-flex align-items-center justify-content-center gap-2" onclick="cerrarSesion()">
                 <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
@@ -152,7 +200,10 @@
                     </li>
                 </ul>
                 <hr class="text-secondary">
-                <div class="small text-white-50 px-2 mb-3">Congregación Algemesí</div>
+              <!-- Aquí se mostrará la congregación activa -->
+                <div class="px-3 mb-2 text-white-55 small" id="display-congregation">
+                    Congregación: Cargando...
+                </div>
                 <!-- Botón de cerrar sesión integrado en móvil -->
                 <button class="btn btn-outline-light btn-sm w-100 d-flex align-items-center justify-content-center gap-2" onclick="cerrarSesion()">
                     <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
@@ -453,6 +504,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/auth.js"></script>
     <script src="/static/js/invitacion.js"></script>
     <script src="/static/js/planificacion.js"></script>
     <script src="/static/js/discursantes.js"></script>
