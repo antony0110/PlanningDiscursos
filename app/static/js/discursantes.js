@@ -50,17 +50,34 @@ async function cargarCongregaciones() {
     try {
         const response = await fetch('/api/congregaciones');
         const congregaciones = await response.json();
-        
+
         const select = document.getElementById('selectCongregacion');
-        if (select) {
-            let opcionesHTML = '<option value="">Todas las congregaciones</option>';
-            congregaciones.forEach(c => {
-                opcionesHTML += `<option value="${c.id}">${c.nombre}</option>`;
-            });
-            select.innerHTML = opcionesHTML;
+        if (!select) return;
+
+        select.innerHTML = '<option value="0">Todas las congregaciones</option>';
+
+        congregaciones.forEach(cong => {
+            const option = document.createElement('option');
+            option.value = cong.id;
+            option.textContent = cong.nombre;
+            select.appendChild(option);
+        });
+
+        // --- ¡AQUÍ ESTÁ LA CLAVE! ---
+        // Una vez que las opciones ya están pintadas en el HTML, 
+        // forzamos a que seleccione la congregación guardada en el localStorage si existe.
+        const congregacionGuardada = localStorage.getItem('congregacion_id');
+        if (congregacionGuardada) {
+            select.value = congregacionGuardada;
+            
+            // Añade estas dos líneas aquí dentro:
+            if (typeof filtrarPorCongregacion === 'function') {
+                filtrarPorCongregacion();
+            }
         }
+
     } catch (error) {
-        console.error("Error al cargar congregaciones principales:", error);
+        console.error("Error al cargar las congregaciones:", error);
     }
 }
 

@@ -5,7 +5,7 @@ function cambiarVistaSesion(sesionActiva, rol = null) {
     const loginScreen = document.getElementById('login-screen');
     const registerScreen = document.getElementById('register-screen');
     const appContainer = document.getElementById('app-container');
-
+   
     if (sesionActiva) {
         // Ocultar pantallas de autenticación
         if (loginScreen) {

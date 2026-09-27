@@ -15,7 +15,7 @@ from app.db import models, schemas
 from app.services.pdf_service import generar_pdf_invitacion
 from app.db.models import Bosquejo
 from passlib.context import CryptContext
-
+import bcrypt
 
 router = APIRouter()
 
@@ -48,11 +48,12 @@ def listar_oradores(
 ):
     query = db.query(models.Orador).options(selectinload(models.Orador.discursos))
     
-    if congregacion_id:
-        query = query.filter(models.Orador.congregacion_id == congregacion_id)
-    else:
-        query = query.filter(models.Orador.congregacion_id == usuario_actual.congregacion_id)
-        
+    # Comprobamos si el parámetro ha sido enviado explícitamente en la petición
+    if congregacion_id is not None:
+        if congregacion_id != 0:  # Si es un ID válido distinto de 0, filtramos por esa congregación
+            query = query.filter(models.Orador.congregacion_id == congregacion_id)
+        # Si congregacion_id == 0 (que es lo que manda "Todas las congregaciones"), 
+        # no aplicamos ningún filtro, devolviendo todas. 
     return query.all()
 
 
@@ -645,11 +646,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def login(datos: schemas.LoginSchema, db: Session = Depends(get_db)):
     usuario = db.query(models.Usuario).filter(models.Usuario.username == datos.username).first()
     
-    if not usuario or not pwd_context.verify(datos.password, usuario.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas"
-        )
+    if not usuario or not verify_password(datos.password, usuario.hashed_password):
+        raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
         
     # Obtenemos el nombre de la congregación gracias a la relación que tienes en models.py
     nombre_congregacion = usuario.congregacion_rel.nombre if usuario.congregacion_rel else "Sin congregación"
@@ -669,7 +667,7 @@ def crear_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     if existe:
         raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
         
-    hashed_pwd = pwd_context.hash(datos.password)
+    hashed_pwd = hash_password(datos.password)
     nuevo_usuario = models.Usuario(
         username=datos.username.strip(),
         hashed_password=hashed_pwd,
@@ -681,3 +679,16 @@ def crear_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     db.refresh(nuevo_usuario)
     
     return {"status": "success", "mensaje": "Usuario creado correctamente"}
+
+def hash_password(password: str) -> str:
+    """Hashea una contraseña utilizando bcrypt nativo."""
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifica una contraseña plana contra el hash guardado."""
+    plain_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(plain_bytes, hashed_bytes)
