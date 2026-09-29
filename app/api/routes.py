@@ -3,7 +3,7 @@ import pandas as pd
 import unicodedata
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
@@ -14,6 +14,7 @@ from app.db.database import get_db
 from app.db import models, schemas
 from app.services.pdf_service import generar_pdf_invitacion
 from app.db.models import Bosquejo
+from app.db.models import Congregacion  # Asegúrate de importar tu modelo Congregacion
 import bcrypt
 
 router = APIRouter()
@@ -101,16 +102,32 @@ def descargar_invitacion_pdf(
     orador_nombre: str,
     numero_discurso: str,
     titulo_discurso: str,
-    fecha_texto: str
+    fecha_texto: str,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
 ):
     os.makedirs("data/temp", exist_ok=True)
     pdf_path = "data/temp/invitacion_temp.pdf"
+    
+    # Buscamos la congregación utilizando el ID del usuario de manera explícita
+    cong = None
+    if hasattr(current_user, 'congregacion_id') and current_user.congregacion_id:
+        cong = db.query(Congregacion).filter(Congregacion.id == current_user.congregacion_id).first()
     
     datos = {
         "orador_nombre": orador_nombre,
         "numero_discurso": numero_discurso,
         "titulo_discurso": titulo_discurso,
-        "fecha_texto": fecha_texto
+        "fecha_texto": fecha_texto,
+        
+        "congregacion_nombre": cong.nombre if cong else "",
+        "congregacion_direccion": getattr(cong, 'direccion', '') or "",
+        "congregacion_email_multimedia": getattr(cong, 'email_multimedia', '') or "",
+        "congregacion_hora_reunion": getattr(cong, 'hora_reunion', '') or "11:00",
+        # Tomamos el nombre del coordinador guardado en los ajustes de congregación, o el username por defecto
+        "usuario_nombre": getattr(cong, 'nombre_coordinadordiscursospublicos', '') or current_user.username,
+        "usuario_telefono": getattr(cong, 'telefono_coordinador', '') or "",
+        "usuario_email": getattr(current_user, 'email', '') or ""
     }
     
     generar_pdf_invitacion(pdf_path, datos)
@@ -120,7 +137,6 @@ def descargar_invitacion_pdf(
         filename=f"Invitacion_{orador_nombre.replace(' ', '_')}.pdf",
         media_type="application/pdf"
     )
-
 
 @router.get("/bosquejos/{numero}")
 def obtener_bosquejo(numero: str, db: Session = Depends(get_db)):
@@ -678,24 +694,47 @@ def login(datos: schemas.LoginSchema, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/auth/crear-usuario")
+@router.post("/crear-usuario")
 def crear_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
-    existe = db.query(models.Usuario).filter(models.Usuario.username == datos.username).first()
-    if existe:
-        raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
-        
-    hashed_pwd = hash_password(datos.password)
+    # 1. Verificamos si se indicó que se quiere crear una nueva congregación por texto
+    congregacion_id_final = datos.congregacion_id
+
+    if hasattr(datos, 'nueva_congregacion_nombre') and datos.nueva_congregacion_nombre:
+        nombre_nuevo = datos.nueva_congregacion_nombre.strip()
+        if nombre_nuevo:
+            # Creamos la congregación en la base de datos
+            nueva_cong = models.Congregacion(
+                nombre=nombre_nuevo,
+                hora_reunion="11:00",
+                nombre_coordinadordiscursospublicos=datos.username
+            )
+            db.add(nueva_cong)
+            db.commit()
+            db.refresh(nueva_cong)
+            
+            # Asignamos el ID generado a la variable final
+            congregacion_id_final = nueva_cong.id
+
+    # 2. Comprobamos si el usuario ya existe
+    usuario_existente = db.query(models.Usuario).filter(models.Usuario.username == datos.username).first()
+    if usuario_existente:
+        raise HTTPException(status_code=400, detail="El nombre de usuario ya está en uso.")
+
+    # 3. Hasheamos la contraseña y creamos el usuario asociado a la congregación final
+    hashed_password = bcrypt.hashpw(datos.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
     nuevo_usuario = models.Usuario(
-        username=datos.username.strip(),
-        hashed_password=hashed_pwd,
-        rol=datos.rol,
-        congregacion_id=datos.congregacion_id  # <--- ¡Importante para asignarlo a su congregación!
+        username=datos.username,
+        hashed_password=hashed_password,
+        rol=datos.rol or "admin",
+        congregacion_id=congregacion_id_final
     )
+    
     db.add(nuevo_usuario)
     db.commit()
     db.refresh(nuevo_usuario)
-    
-    return {"status": "success", "mensaje": "Usuario creado correctamente"}
+
+    return {"mensaje": "Usuario y congregación creados con éxito", "id": nuevo_usuario.id}
 
 def hash_password(password: str) -> str:
     """Hashea una contraseña utilizando bcrypt nativo."""
@@ -709,3 +748,80 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     plain_bytes = plain_password.encode('utf-8')
     hashed_bytes = hashed_password.encode('utf-8')
     return bcrypt.checkpw(plain_bytes, hashed_bytes)
+
+
+class CongregacionConfigUpdate(BaseModel):
+    nombre: Optional[str] = None
+    direccion: Optional[str] = None
+    hora_reunion: Optional[str] = None
+    email_multimedia: Optional[str] = None
+    telefono_coordinador: Optional[str] = None
+    nombre_coordinadordiscursospublicos: Optional[str] = None  # 📌 Debe coincidir con el modelo de la BD
+
+@router.get("/congregacion/config")
+def obtener_config_congregacion(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    # Buscamos directamente por el ID que tiene el usuario vinculado
+    congregacion = None
+    if current_user.congregacion_id:
+        congregacion = db.query(models.Congregacion).filter(models.Congregacion.id == current_user.congregacion_id).first()
+
+    if not congregacion:
+        return {
+            "nombre": "",
+            "direccion": "",
+            "hora_reunion": "",
+            "email_multimedia": "",
+            "telefono_coordinador": "",
+            "nombre_coordinadordiscursospublicos": ""
+        }
+    
+    return {
+        "nombre": congregacion.nombre or "",
+        "direccion": congregacion.direccion or "",
+        "hora_reunion": getattr(congregacion, 'hora_reunion', '') or "",
+        "email_multimedia": congregacion.email_multimedia or "",
+        "telefono_coordinador": congregacion.telefono_coordinador or "",
+        "nombre_coordinadordiscursospublicos": getattr(congregacion, 'nombre_coordinadordiscursospublicos', '') or ""
+    }
+
+@router.put("/congregacion/config")
+def actualizar_config_congregacion(
+    config: CongregacionConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    # 1. Si el usuario aún no tiene ninguna congregación vinculada, la creamos ahora mismo
+    if not current_user.congregacion_id:
+        nueva_congregacion = models.Congregacion()
+        db.add(nueva_congregacion)
+        db.commit()
+        db.refresh(nueva_congregacion)
+        
+        # Vinculamos la nueva congregación al usuario y guardamos en la tabla de usuarios
+        current_user.congregacion_id = nueva_congregacion.id
+        db.commit()
+
+    # 2. Buscamos la congregación usando el ID del usuario
+    congregacion = db.query(models.Congregacion).filter(models.Congregacion.id == current_user.congregacion_id).first()
+    if not congregacion:
+        raise HTTPException(status_code=404, detail="Congregación no encontrada")
+
+    # 3. Actualizamos los campos
+    if config.nombre is not None:
+        congregacion.nombre = config.nombre
+    if config.direccion is not None:
+        congregacion.direccion = config.direccion
+    if config.hora_reunion is not None:
+        congregacion.hora_reunion = config.hora_reunion
+    if config.email_multimedia is not None:
+        congregacion.email_multimedia = config.email_multimedia
+    if config.telefono_coordinador is not None:
+        congregacion.telefono_coordinador = config.telefono_coordinador
+    if config.nombre_coordinadordiscursospublicos is not None:
+        congregacion.nombre_coordinadordiscursospublicos = config.nombre_coordinadordiscursospublicos
+
+    db.commit()
+    return {"message": "Configuración guardada correctamente"}

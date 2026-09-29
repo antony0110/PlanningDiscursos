@@ -184,12 +184,12 @@ function enviarWhatsAppDirecto() {
 }
 
 // 5. Descargar PDF
-function generarPDFDirecto() {
+async function generarPDFDirecto() {
     const oradorNombre = document.getElementById('pdfOradorNombre')?.value;
     const numDiscurso = document.getElementById('pdfNumDiscurso')?.value;
     const tituloDiscurso = document.getElementById('pdfTituloDiscurso')?.value || '';
     const fechaRaw = document.getElementById('pdfFecha')?.value;
-    const fechaTexto = typeof formatearFechaEspanol === 'function' ? formatearFechaEspanol(fechaRaw) : fechaRaw;
+    const fechaTexto = typeof formatearFechaEspañol === 'function' ? formatearFechaEspañol(fechaRaw) : fechaRaw;
 
     if (!oradorNombre || !numDiscurso) {
         alert("Completa al menos el nombre del orador y el número de discurso.");
@@ -197,7 +197,42 @@ function generarPDFDirecto() {
     }
 
     const url = `/api/invitacion/pdf?orador_nombre=${encodeURIComponent(oradorNombre)}&numero_discurso=${encodeURIComponent(numDiscurso)}&titulo_discurso=${encodeURIComponent(tituloDiscurso)}&fecha_texto=${encodeURIComponent(fechaTexto)}`;
-    window.open(url, '_blank');
+
+    try {
+        const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) throw new Error("Error de autorización.");
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        // --- MODIFICACIÓN AQUÍ ---
+        // Limpiamos el nombre del orador para que sea válido como nombre de archivo (reemplazando espacios y caracteres extraños)
+        const nombreLimpio = oradorNombre.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+        const nombreArchivo = `Invitacion_${nombreLimpio}.pdf`;
+
+        // Creamos un enlace temporal para forzar la descarga directa con nombre personalizado
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = nombreArchivo;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Liberamos el objeto blob pasado un momento
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+
+    } catch (error) {
+        console.error("Error:", error);
+        alert("No se pudo generar el PDF. Revisa tu sesión.");
+    }
 }
 
 // 6. Validación del DISCURSO (< 1 año O asignado a futuro)

@@ -94,7 +94,7 @@
 
         <div class="mb-3">
             <label class="form-label">Congregación</label>
-            <select id="reg-congregacion" class="form-select">
+            <select id="reg-congregacion" class="form-select" onchange="comprobarCongregacionNueva(this)">
                 <option value="">Selecciona tu congregación...</option>
                 <option value="nueva" class="text-primary fw-bold">➕ Crear nueva congregación...</option>
             </select>
@@ -103,10 +103,7 @@
         <!-- CAMPO OCULTO QUE APARECE AL SELECCIONAR "CREAR NUEVA" -->
         <div class="mb-3 d-none" id="div-nueva-congregacion">
             <label class="form-label text-primary fw-bold">Nombre de la nueva congregación</label>
-            <div class="input-group">
-                <input type="text" id="reg-nueva-congregacion-nombre" class="form-control" placeholder="Ej. Valencia Centro">
-                <button class="btn btn-outline-primary" type="button" onclick="guardarNuevaCongregacionRapida()">Añadir</button>
-            </div>
+            <input type="text" id="reg-nueva-congregacion-nombre" class="form-control" placeholder="Ej. Valencia Centro">
         </div>
 
         <div id="reg-error" class="text-danger small mb-3" style="display: none;"></div>
@@ -157,6 +154,11 @@
                         <i class="bi bi-clock-history me-2"></i> Histórico
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="btn-configuracion" onclick="cambiarSeccion('configuracion')">
+                        <i class="fas fa-cog me-2"></i> Ajustes de Congregación
+                    </a>
+                </li>
             </ul>
             <hr class="text-secondary">
             <!-- Aquí se mostrará la congregación activa -->
@@ -196,6 +198,11 @@
                     <li class="nav-item">
                         <a href="#" class="nav-link" data-bs-dismiss="offcanvas" onclick="cambiarSeccion('historico')">
                             <i class="bi bi-clock-history me-2"></i> Histórico
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" id="btn-configuracion" onclick="cambiarSeccion('configuracion')">
+                            <i class="fas fa-cog me-2"></i> Ajustes de Congregación
                         </a>
                     </li>
                 </ul>
@@ -364,8 +371,97 @@
                 </div>
             </section>
 
-        </div>
+            <!-- SECCIÓN 5: AJUSTE / CONFIGURACIÓN DE CONGREGACIÓN -->
+            <section id="sec-configuracion" style="display: none;">
+                <div class="container-fluid px-4">
+                    <!-- Cabecera de la sección -->
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <div>
+                            <h2 class="text-primary fw-bold mb-1"><i class="fas fa-id-card me-2"></i>Perfil de la Congregación</h2>
+                            <p class="text-muted mb-0">Gestiona los datos institucionales, horarios y de contacto para las invitaciones PDF.</p>
+                        </div>
+                    </div>
 
+                    <div class="row justify-content-center">
+                        <div class="col-xl-9 mb-4">
+                            <div class="card border-0 shadow-sm p-4">
+                                <!-- Cabecera de la tarjeta con estilo -->
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary-subtle text-primary rounded-3 p-2 me-3 fs-5">
+                                            <i class="fas fa-church"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="fw-bold text-dark mb-0">Información General</h5>
+                                            <small class="text-muted">Personaliza los datos de tu congregación</small>
+                                        </div>
+                                    </div>
+                                    <button type="button" id="btn-habilitar-edicion" class="btn btn-outline-primary btn-sm px-3 shadow-sm">
+                                        <i class="fas fa-edit me-1"></i> Modificar
+                                    </button>
+                                </div>
+                                <hr class="text-muted mb-4">
+
+                                <form id="form-config-congre">
+                                    <!-- Bloque 1: Datos del Salón -->
+                                    <div class="mb-4">
+                                        <h6 class="text-secondary fw-bold mb-3"><i class="fas fa-map-marked-alt me-2 text-primary"></i>Ubicación y Horarios</h6>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark small" for="cfg-nombre">Nombre de la Congregación</label>
+                                            <input type="text" id="cfg-nombre" class="form-control form-control-lg fs-6" placeholder="Ej: Congregación Algemesí" disabled>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark small" for="cfg-direccion">Dirección del Salón del Reino</label>
+                                            <input type="text" id="cfg-direccion" class="form-control form-control-lg fs-6" placeholder="Ej: Carrer Germaníes, 56, L'Alcudia (Valencia)" disabled>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark small" for="cfg-hora">Hora de la Reunión Pública</label>
+                                            <input type="text" id="cfg-hora" class="form-control form-control-lg fs-6" placeholder="Ej: 11:00" disabled>
+                                            <div class="form-text">Indica la hora a la que habitualmente comienza la reunión de fin de semana.</div>
+                                        </div>
+                                    </div>
+
+                                    <hr class="text-muted-light mb-4">
+
+                                    <!-- Bloque 2: Contacto y Multimedia -->
+                                    <div class="mb-4">
+                                        <h6 class="text-secondary fw-bold mb-3"><i class="fas fa-address-book me-2 text-success"></i>Contacto y Multimedia</h6>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold text-dark small" for="cfg-email">Correo electrónico para Multimedia / Imágenes</label>
+                                            <input type="email" id="cfg-email" class="form-control form-control-lg fs-6" placeholder="Ej: congrejugamultimedia@gmail.com" disabled>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label fw-bold text-dark small" for="cfg-nombre-coordinador">Coordinador de Discursos</label>
+                                                <input type="text" id="cfg-nombre-coordinador" class="form-control" placeholder="Ej: Antony Gomez Carrasco" disabled>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label fw-bold text-dark small" for="cfg-telefono">Teléfono de contacto</label>
+                                                <input type="text" id="cfg-telefono" class="form-control" placeholder="Ej: 651 174 827" disabled>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Botones de Guardar / Cancelar (Ocultos inicialmente) -->
+                                    <div class="d-flex justify-content-end mt-4 gap-2 pt-3 border-top" id="contenedor-botones" style="display: none !important;">
+                                        <button type="button" id="btn-cancelar-edicion" class="btn btn-light border px-3 py-2">
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" class="btn btn-primary px-4 py-2 shadow-sm">
+                                            <i class="fas fa-save me-2"></i> Guardar Cambios
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
     </div>
 
     <!-- MODALES DE LA APLICACIÓN (Fuera del main-content) -->
@@ -509,5 +605,6 @@
     <script src="/static/js/planificacion.js"></script>
     <script src="/static/js/discursantes.js"></script>
     <script src="/static/js/historico.js"></script>
+    <script src="/static/js/configuracion.js"></script>
 </body>
 </html>

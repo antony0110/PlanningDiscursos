@@ -60,9 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 function cambiarSeccion(seccion) {
-    ['discursantes', 'invitacion', 'planificacion', 'historico'].forEach(sec => {
+console.log("Cambiando a sección:", seccion); // <--- Añade esto
+    ['discursantes', 'invitacion', 'planificacion', 'historico', 'configuracion'].forEach(sec => {
         const elSec = document.getElementById('sec-' + sec);
         const elBtn = document.getElementById('btn-' + sec);
+        console.log(`Buscando sec-${sec}:`, elSec); // <--- Y esto para ver si encuentra el elemento
         if (elSec) elSec.style.display = (sec === seccion) ? 'block' : 'none';
         if (elBtn) elBtn.classList.toggle('active', sec === seccion);
     });

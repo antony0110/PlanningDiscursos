@@ -205,13 +205,17 @@ function filtrarOradores() {
     const nombreFiltro = inputNombre ? inputNombre.value.toLowerCase().trim() : "";
 
     const oradoresFiltrados = window.todosLosOradoresGlobal.filter(orador => {
-        const coincideNombre = nombreFiltro === "" || orador.nombre.toLowerCase().includes(nombreFiltro);
+        const nombreOrador = orador.nombre ? String(orador.nombre).toLowerCase() : "";
+        const coincideNombre = nombreFiltro === "" || nombreOrador.includes(nombreFiltro);
         
         const discursosArray = (orador.discursos || []).map(d => String(d.numero_discurso || d.numero || d));
         const coincideDiscurso = discursoFiltro === "" || discursosArray.includes(discursoFiltro);
         
         const congreIdOrador = String(orador.congregacion_id || (orador.congregacion && orador.congregacion.id) || "");
-        const coincideCongregacion = congregacionFiltro === "" || congreIdOrador === congregacionFiltro;
+        
+        // CORRECCIÓN AQUÍ: Si el filtro está vacío, es "0", "-1" o contiene "tod", muestra todas las congregaciones
+        const esTodas = congregacionFiltro === "" || congregacionFiltro === "0" || congregacionFiltro === "-1" || congregacionFiltro.toLowerCase().includes("tod");
+        const coincideCongregacion = esTodas || congreIdOrador === congregacionFiltro;
 
         return coincideNombre && coincideDiscurso && coincideCongregacion;
     });

@@ -1,8 +1,31 @@
 import os
+from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+
+from datetime import datetime
+
+def formatear_fecha_y_dia(fecha_str: str) -> tuple:
+    """Convierte una fecha 'YYYY-MM-DD' en el día de la semana y texto legible."""
+    try:
+        dt = datetime.strptime(fecha_str, "%Y-%m-%d")
+        
+        # Días de la semana en español (0: Lunes ... 6: Domingo)
+        dias_semana = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+        dia_semana = dias_semana[dt.weekday()]
+        
+        meses = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ]
+        fecha_formateada = f"{dt.day} de {meses[dt.month - 1]} del {dt.year}"
+        
+        return dia_semana, fecha_formateada
+    except Exception:
+        # Por si hubiera algún fallo o viene ya en otro formato
+        return "domingo", fecha_str
 
 def generar_pdf_invitacion(output_path: str, datos: dict):
     # Crear el documento A4 con márgenes de 2 cm
@@ -37,9 +60,24 @@ def generar_pdf_invitacion(output_path: str, datos: dict):
 
     story = []
 
-    # 1. Cabecera - Datos de la Congregación
-    story.append(Paragraph("<b>Congregación de Algemesí</b>", title_style))
-    story.append(Paragraph("Carrer Germaníes, 56, bajo. L'Alcudia. (Valencia)", body_style))
+    # Extraer datos dinámicos de la congregación y del coordinador con valores por defecto
+    congregacion_nombre = datos.get('congregacion_nombre', 'Nuestra Congregación')
+    congregacion_direccion = datos.get('congregacion_direccion', '')
+    email_multimedia = datos.get('congregacion_email_multimedia', 'correo@multimedia.com')
+    
+    # Cogemos el nombre del coordinador de discursos público configurado en la congregación
+    usuario_nombre = (
+        datos.get('nombre_coordinadordiscursospublicos') or 
+        datos.get('nombre_coordinador') or 
+        datos.get('usuario_nombre', 'Coordinador de discursos')
+    )
+    usuario_telefono = datos.get('usuario_telefono', '')
+    usuario_email = datos.get('usuario_email', '')
+
+    # 1. Cabecera - Datos Dinámicos de la Congregación
+    story.append(Paragraph(f"<b>Congregación de {congregacion_nombre}</b>", title_style))
+    if congregacion_direccion:
+        story.append(Paragraph(congregacion_direccion, body_style))
     story.append(Spacer(1, 15))
 
     # 2. Saludo al Orador
@@ -49,8 +87,11 @@ def generar_pdf_invitacion(output_path: str, datos: dict):
     story.append(Spacer(1, 15))
 
     # 3. Bloque de Discurso y Fecha (Tabla destacada)
+    fecha_cruda = datos.get('fecha_texto') or datos.get('fecha', '')
+    dia_semana, fecha_formateada = formatear_fecha_y_dia(fecha_cruda)
+
     discurso_texto = f"<b>{datos.get('numero_discurso', '')}.-</b> {datos.get('titulo_discurso', '')}"
-    fecha_texto = f"El discurso será el domingo, <b>{datos.get('fecha_texto', '')}</b> a las <b>11:00 horas</b> en la dirección arriba indicada."
+    fecha_texto = f"El discurso será el <b>{dia_semana}</b>, <b>{fecha_formateada}</b> a las <b>{datos.get('congregacion_hora_reunion', '11:00')}</b> en la dirección arriba indicada."
 
     tabla_datos = [
         [Paragraph("<b>Bosquejo y tema:</b>", body_style), Paragraph(discurso_texto, body_style)],
@@ -67,12 +108,12 @@ def generar_pdf_invitacion(output_path: str, datos: dict):
     story.append(t)
     story.append(Spacer(1, 15))
 
-    # 4. Instrucciones Multimedia y Confirmación
-    story.append(Paragraph(
-        "En el caso de utilizar imágenes, por favor remítelas lo antes posible al siguiente correo electrónico: "
-        "<b>algemesimultimedia@gmail.com</b> e indícanos también el número de la canción que utilizarás.",
-        body_style
-    ))
+    # 4. Instrucciones Multimedia Dinámicas y Confirmación
+    texto_multimedia = (
+        f"En el caso de utilizar imágenes, por favor remítelas lo antes posible al siguiente correo electrónico: "
+        f"<b>{email_multimedia}</b> e indícanos también el número de la canción que utilizarás."
+    )
+    story.append(Paragraph(texto_multimedia, body_style))
     story.append(Spacer(1, 10))
     story.append(Paragraph(
         "Por otra parte, te ruego me confirmes si aceptas este privilegio a la mayor brevedad posible.<br/><br/>"
@@ -83,10 +124,15 @@ def generar_pdf_invitacion(output_path: str, datos: dict):
     ))
     story.append(Spacer(1, 20))
 
-    # 5. Firma del Coordinador
+    # 5. Firma Dinámica del Coordinador y Teléfono/Email
+    contacto_linea = f"{usuario_telefono} | {usuario_email}".strip(" |")
+    firma_texto = f"<b>{usuario_nombre}</b><br/>Coordinador de discursos Congregación {congregacion_nombre}"
+    if contacto_linea:
+        firma_texto += f"<br/>{contacto_linea}"
+
     story.append(Paragraph("Muchas gracias por tu buena disposición y colaboración.<br/>Un abrazo,", body_style))
     story.append(Spacer(1, 10))
-    story.append(Paragraph("<b>Antony Gomez Carrasco</b><br/>Coordinador de discursos Congregación Algemesí<br/>651 174 827 | antonygomezcarrasco@gmail.com", body_style))
+    story.append(Paragraph(firma_texto, body_style))
 
     # Construir el PDF
     doc.build(story)

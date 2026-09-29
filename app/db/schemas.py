@@ -64,6 +64,7 @@ class UsuarioCreate(BaseModel):
     password: str
     rol: Optional[str] = "invitado"
     congregacion_id: Optional[int] = None
+    nueva_congregacion_nombre: Optional[str] = None  # 👈 Añade esta línea
 
 class UsuarioLogin(BaseModel):
     username: str

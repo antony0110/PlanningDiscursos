@@ -78,23 +78,24 @@ async function ejecutarLogin() {
         const data = await response.json();
 
         if (response.ok) {
-            const rolAsignado = data.rol || 'admin';
-            localStorage.setItem('usuario', data.username || usuario);
-            localStorage.setItem('rol', rolAsignado);
-            
-            // Guardamos el nombre de la congregación y el ID si vienen en la respuesta
-            if (data.congregacion) {
-                localStorage.setItem('congregacion', data.congregacion);
-            }
-            if (data.congregacion_id) {
-                localStorage.setItem('congregacion_id', data.congregacion_id);
-            }
-            
-            localStorage.setItem('sesion_activa', 'true');
-            
-            // 🚀 SOLUCIÓN: Recargamos la página limpiamente para que la app 
-            // arranque con las credenciales aplicadas y el interceptor activo.
-            location.reload();
+                const rolAsignado = data.rol || 'admin';
+                localStorage.setItem('usuario', data.username || usuario);
+                localStorage.setItem('rol', rolAsignado);
+                
+                // 🔑 ¡AÑADE ESTA LÍNEA AQUÍ PARA GUARDAR EL TOKEN!
+                localStorage.setItem('token', data.access_token || data.token);
+
+                // Guardamos el nombre de la congregación y el ID si vienen en la respuesta
+                if (data.congregacion) {
+                    localStorage.setItem('congregacion', data.congregacion);
+                }
+                if (data.congregacion_id) {
+                    localStorage.setItem('congregacion_id', data.congregacion_id);
+                }
+
+                localStorage.setItem('sesion_activa', 'true');
+
+                location.reload();
             
         } else {
             let mensajeError = data.detail || "Usuario o contraseña incorrectos.";
@@ -112,16 +113,19 @@ async function ejecutarLogin() {
     }
 }
 
+
 // REGISTRO INTELIGENTE
 async function ejecutarRegistro() {
     const usuarioInput = document.getElementById('reg-user');
     const passwordInput = document.getElementById('reg-password');
     const congregacionInput = document.getElementById('reg-congregacion');
+    const inputNuevaCong = document.getElementById('reg-nueva-congregacion-nombre'); // Tu input visual nuevo
     const errorDiv = document.getElementById('reg-error');
 
     const usuario = usuarioInput ? usuarioInput.value.trim() : '';
     const password = passwordInput ? passwordInput.value.trim() : '';
     const congregacionId = congregacionInput ? congregacionInput.value.trim() : '';
+    const nombreNuevaCong = inputNuevaCong ? inputNuevaCong.value.trim() : '';
 
     if (errorDiv) {
         errorDiv.style.display = 'none';
@@ -129,24 +133,38 @@ async function ejecutarRegistro() {
     }
 
     try {
-        const response = await fetch('/api/auth/crear-usuario', {
+        const payload = {
+            username: usuario,
+            password: password,
+            rol: "admin"
+        };
+
+        // Si seleccionó "nueva", cogemos el valor de nuestra cajita de texto en pantalla
+        if (congregacionId === "nueva") {
+            if (!nombreNuevaCong) {
+                alert("Por favor, introduce el nombre de la nueva congregación.");
+                if (inputNuevaCong) inputNuevaCong.focus();
+                return;
+            }
+            payload.nueva_congregacion_nombre = nombreNuevaCong;
+        } else {
+            payload.congregacion_id = congregacionId ? parseInt(congregacionId) : null;
+        }
+
+        const response = await fetch('/api/crear-usuario', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username: usuario,
-                password: password,
-                rol: "admin",
-                congregacion_id: congregacionId ? parseInt(congregacionId) : null
-            })
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            alert("¡Usuario creado correctamente! Ya puedes iniciar sesión.");
+            alert("¡Usuario y congregación creados correctamente! Ya puedes iniciar sesión.");
             if (usuarioInput) usuarioInput.value = '';
             if (passwordInput) passwordInput.value = '';
             if (congregacionInput) congregacionInput.value = '';
+            if (inputNuevaCong) inputNuevaCong.value = '';
         } else {
             let mensajeError = data.detail || "Revise los datos introducidos.";
             if (errorDiv) {
@@ -267,7 +285,28 @@ async function cargarCongregacionesRegistro() {
             select.appendChild(option);
         });
 
+        // <-- AÑADE ESTO AQUÍ ABAJO -->
+        const optionNueva = document.createElement('option');
+        optionNueva.value = "nueva";
+        optionNueva.textContent = "+ Crear nueva congregación...";
+        select.appendChild(optionNueva);
+
     } catch (error) {
         console.error("Error al cargar las congregaciones:", error);
+    }
+}
+
+function comprobarCongregacionNueva(selectElement) {
+    const divNueva = document.getElementById('div-nueva-congregacion');
+    if (!divNueva) return;
+
+    if (selectElement.value === "nueva") {
+        divNueva.classList.remove('d-none'); // Muestra tu input y el botón "Añadir"
+        const inputNombre = document.getElementById('reg-nueva-congregacion-nombre');
+        if (inputNombre) inputNombre.focus();
+    } else {
+        divNueva.classList.add('d-none'); // Lo oculta si selecciona otra
+        const inputNombre = document.getElementById('reg-nueva-congregacion-nombre');
+        if (inputNombre) inputNombre.value = '';
     }
 }

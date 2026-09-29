@@ -8,6 +8,13 @@ class Congregacion(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, unique=True, nullable=False, index=True)
+    
+    # 📌 Nuevos campos para la configuración de las invitaciones PDF
+    direccion = Column(String, nullable=True)
+    hora_reunion = Column(String, nullable=True)
+    email_multimedia = Column(String, nullable=True)
+    telefono_coordinador = Column(String, nullable=True)
+    nombre_coordinadordiscursospublicos = Column(String, nullable=True)
 
     # Relaciones inversas
     oradores = relationship("Orador", back_populates="congregacion_rel", cascade="all, delete-orphan")
