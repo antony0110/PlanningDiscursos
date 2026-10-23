@@ -112,6 +112,12 @@
 
     <!-- 2. CONTENEDOR PRINCIPAL DE LA APLICACIÓN (OCULTO HASTA AUTENTICARSE) -->
     <div id="app-container" style="display: none;">
+        <!-- Cabecera superior para Escritorio (Sin franja negra, solo la pastilla flotante a la derecha) -->
+        <div class="d-none d-lg-flex justify-content-end align-items-center mb-3">
+            <div class="bg-white px-3 py-1 rounded-pill shadow-sm border" style="font-size: 13px;">
+                👤 <span id="display-username" class="fw-bold text-dark">admin</span>
+            </div>
+        </div>
         <!-- NAVBAR MÓVIL (Solo visible en pantallas pequeñas) -->
         <nav class="navbar navbar-dark bg-dark d-lg-none px-3">
             <div class="container-fluid d-flex justify-content-between align-items: center">
